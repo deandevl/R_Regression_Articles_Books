@@ -1,0 +1,138 @@
+---
+title: "Chapter 3 Data Pre-processing Exercises"
+output: 
+  html_document:
+    toc: yes
+    toc_depth: 3
+    css: ../../../style.css
+params:
+  date: !r Sys.Date()        
+---
+
+```{r,setup, include=FALSE, eval=TRUE}
+options(knitr.table.format = "html")
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 12, fig.height = 8)
+```
+
+<div>Author: Rick Dean</div>
+<div>Article date: `r params$date`</div>
+
+<div class="abstract">
+  <p class="abstract">Abstract</p>
+The following notes/scripts/plots are inspired by Chapter 3 Data Pre-processing Exercises 3-2 of [Applied Predictive Modeling](http://appliedpredictivemodeling.com/) by Max Kuhn and Kjell Johnson.
+</div>
+
+```{r, message = FALSE, warning = FALSE}
+library(knitr)
+library(data.table)
+library(ggplot2)
+library(mlbench)
+library(grid)
+library(gtable)
+library(RregressPkg)
+library(RplotterPkg)
+```
+
+## The Soybean Dataset
+
+### (a) Investigate the frequency disributions
+<div class="task">Task: Set up the data set. </div>
+
+```{r}
+data(Soybean, package = "mlbench")
+soybean_dt <- as.data.table(Soybean)
+str(soybean_dt)
+```
+
+The response variable *Class* is a nominal variable with 19 class types.  The remaining 35 predictor variables have categorical values encoded numerically, with the first value encoded as "0", the second as "1", and so forth.
+
+1. Separate out non-predictor variables *Class*, *date*:
+```{r}
+class_dt <- soybean_dt[, .(Class)]
+date_dt <- soybean_dt[, .(date)]
+soybean_dt <- soybean_dt[, !c("Class", "date")]
+```
+
+2. Are there any NA values? If so remove observations with NA values:
+```{r}
+(any_na <- base::anyNA(soybean_dt))
+dt <- na.omit(soybean_dt)
+```
+
+3. Plot frequency distributions:
+```{r, fig.width = 13, fig.height = 16}
+RplotterPkg::multi_bar_plot(
+  df = dt,
+  variables = colnames(dt),
+  columns = 6,
+  col_width = 2.0,
+  row_height = 2.5,
+  y_limits = c(0,600),
+  y_major_breaks = seq(0, 600, 150)
+)
+```
+Most of the predictors are skewed toward the "0" level. A few like *precip* and *leaves* are skewed to the upper levels.
+
+### (b) Missing values
+
+Are there particular predictors that are more likely to be missing? Is the pattern of missing data related to the classes?
+
+<div class="task">Task: Apply RregressPkg::plot_replace_missing() to plot the frequency of NAs' among predictor variables.</div>  
+
+```{r, fig.width = 12, fig.height = 14}
+plot_1 <- RregressPkg::plot_replace_missing(
+  df = soybean_dt,
+  variables = colnames(soybean_dt),
+  title = "Frequency of NA's Among Soybean Predictors",
+  bar_size = 0.6,
+  bar_color = "white",
+  bar_labels = TRUE,
+  bar_label_size = 3,
+  do_coord_flip = TRUE,
+  order_bars = "asc"
+)
+plot_1$missing_plot
+```
+
+It appears that there are subgroups of predictors with equal or near equal numbers of missing values.
+
+<div class="task">Task: Plot the frequency of NAs' across the values of the *Class*.</div>  
+
+1. Column bind *soybean_dt* and *class_dt*
+```{r}
+soybean_class_dt <- cbind(soybean_dt, class_dt)
+```
+
+2. In *soybean_class_dt* add a variable *na_count* that has the number of NAs' for each observation:
+```{r}
+na_count_vt <- apply(soybean_dt, 1, function(x) sum(is.na(x)))
+soybean_class_dt[, na_count := na_count_vt]
+```
+
+```{r}
+class_na_count_dt <- soybean_class_dt[, lapply(.SD, function(x){sum(is.na(x))}), by = Class]
+class_na_count_long_dt <- data.table::melt(
+  class_na_count_dt, id.vars = "Class", 
+  measure.vars = colnames(soybean_dt),
+  variable.name = "Predictor",
+  value.name = "NA_Count")
+```
+
+
+3. Plot the predictors bar chart for each *Class*:
+```{r, fig.width=12, fig.height=49}
+RplotterPkg::multi_bar_plot(
+  df = class_na_count_long_dt,
+  factor_var = "Class",
+  factor_x = "Predictor",
+  aes_y = "NA_Count",
+  columns = 1,
+  col_width = 10,
+  row_height = 2.5,
+  rot_x_tic_angle = 40,
+  y_limits = c(0,80),
+  y_major_breaks = seq(0,80,20)
+)
+```
+
+Five of the nineteen classes have some level of NA counts. It appears that the *phytophthora-rot* class tops the list with many NA's associated with it. The classes *2-4-d-injury* and *cyst-nematode* have some observations that have NA's across nearly all the predictors.

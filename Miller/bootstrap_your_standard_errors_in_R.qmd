@@ -1,0 +1,387 @@
+---
+title: "Bootstrap Your Standard Errors in R"
+author: "Rick Dean"
+format:
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: true
+    number-offset: 0
+    self-contained: true
+    smooth-scroll: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 5
+    fig-height: 5
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    minimal: false
+    css: ../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "The following are notes, graphs and R scripts inspired by the article [Bootstrap Your Standard Errors in R, the Tidy Way](http://svmiller.com/blog/2020/03/bootstrap-standard-errors-in-r/) by Steve Miller."
+---
+
+Load the Required R Packages.
+```{r, warning=FALSE, message=FALSE}
+library(data.table)
+library(ggplot2)
+library(modelr)
+library(here)
+library(magrittr)
+library(RplotterPkg)
+library(RregressPkg)
+```
+
+# Bootstrap Your Standard Errors in R
+
+## Homoskedasticity -- a definition
+
+Steve Miller's definition: 
+
+> ...the variability of our variable (response) is unequal across the range of our variables (predictors) that we believe explain it.
+
+The condition is often referred to as "heteroskedasticity".
+
+From Wikipedia:
+
+> A standard assumption in a linear regression, $y_{i} = X_{i} \beta + \epsilon_{i} , i = 1 , … , N$ , is that the variance of the disturbance term $\epsilon_{i}$ is the same across observations, and in particular does not depend on the values of the explanatory variables $X_{i}$.
+
+Mr. Miller hints at how we might detect the presence of a non-random pattern in the "disturbance term" by looking at the plot between the fitted value and the prediction error that's dependent on the predictor variables.
+
+Mr. Miller also states that homoskedasticity "is one of the most important assumptions of an OLS model that's easy to violate". In addition, "violating this assumption of homoskedasticity mostly concern our standard errors around our coefficients."
+
+
+## Heteroskedasticity -- a solution
+
+Mr. Miller suggests a technique called "bootstrapping" which he illustrates with an example data set.
+
+His goal in the article:
+
+> Here, I'll hope to make it more transparent and explain what's happening in bootstrapping standard errors that both shows how to do it and explains what bootstrapping is doing.
+
+## Crime data set
+
+Mr. Miller describes the data as "statewide crime data from around 1993 that includes 51 observations (i.e. 50 states + DC)". 
+
+The response and predictor variables are as follows:
+```{r, echo=FALSE}
+variables_df <- data.frame(
+  Variable = c("state","violent","murder","poverty","single","metro","white","highschool"),
+  Description = c("char - state","numeric - violent rate per 100000","numeric - murder rate per 100000","numeric - percent below poverty level","numeric - percent families headed by single parent","numeric - percent of pop in metro areas","numeric - percent of state is white","numeric - percent of state grad from hs")
+)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: Crime Data Set
+
+RplotterPkg::create_table(
+  x = variables_df,
+  container_width_px = 300
+)
+```
+
+## OLS preliminaries
+
+Mr. Miller proposes to set up an OLS model with *violent* as the response and *poverty*, *single*, *metro*, *white*, *highschool* as predictors.
+
+To get more familiar with the data I propose that we complete two plots:
+
+a. A matrix of scatter plots that show pattens among the variables of interest.
+
+b. A plot of the 51 observations with their respective *violent* values to check for any potential outliers or observations that have undue influence on the OLS.
+
+:::topic
+The matrix of scatter plots.
+:::
+
+Set up the data set.
+```{r}
+data_file <- file.path(here::here(), "Miller", "data", "crime.txt")
+crime_dt <- data.table::fread(data_file) %>%
+  .[, .(State = State, ViolentC = VR, Poverty = P, Single = S, Metro = M, White = W, HSGrad = H)]
+```
+
+Plot the scatter matrix.
+```{r}
+#| code-fold: true
+#| fig-width: 8
+#| fig-height: 8
+#| fig-cap: Scatter matrix of crime variables.
+
+matrix_plot <- RregressPkg::plot_matrix_scatter(
+  df = crime_dt[, !c("State")],
+  plot_dim = 8,
+  display_plot = F
+)
+grid::grid.draw(matrix_plot)
+```
+
+::: takeaway
+Take Away: There appears to be some promising predictors for *ViolentC* along with some possible collinearity among the predictor variables.
+:::
+
+:::topic
+Plot the observations with Cook's Distance.
+:::
+
+```{r}
+#| code-fold: true
+#| fig-width: 10
+#| fig-cap: Possible outliers for violent crime using Cook's Distance as the measurement.
+
+influence_lst <- RregressPkg::plot_influence(
+  df = crime_dt,
+  formula_obj = ViolentC ~ Poverty + Single + Metro + White + HSGrad,
+  label_threshold = 0.5,
+  id_col = "State",
+  x_title = "State",
+  y_title = "Cook's Distance",
+  rot_y_tic_label = T,
+  pts_size = 2.5,
+  axis_text_size = 6
+)
+influence_lst$plot
+```
+
+Show the values of response/predictor values for the states "HI", "MS", and "DC".
+```{r}
+#| code-fold: true
+#| tbl-cap: Possible Outlier/Leverage Influence among states using Cook's value.
+
+high_influence_dt <- data.table::as.data.table(influence_lst$influence) %>%
+  .[id %in% c("HI","MS","DC"), .(State = id, Cook = influence_vals)]
+
+RplotterPkg::create_table(
+  x = high_influence_dt,
+  container_width_px = 300
+)
+```
+
+::: takeaway
+Take Away:
+:::
+
+a. *HI* has a low *ViolentC* but large *Metro*.
+
+b. *DC* has both the largest response *ViolentC* and largest *Single* predictor
+
+c. *MS* has the third highest *Poverty* but a medium response *ViolentC*
+
+## OLS estimate
+
+:::topic
+Explaining violent crime per 100,000 people -- the role of the predictors.
+:::
+
+Estimate the OLS.
+```{r}
+crime_ols <- RregressPkg::ols_calc(
+  df = crime_dt,
+  formula_obj = ViolentC ~ Poverty + Single + Metro + White + HSGrad
+)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: What Explains the Violent Crime Rate
+
+RplotterPkg::create_table(
+  x = crime_ols$coef_df,
+  container_width_px = 400
+)
+```
+
+::: takeaway
+Take Away: All but *White* and *HSGrad* appear to be significant predictors based on the $p$-values.
+:::
+
+## OLS assumption of homoskedasticity
+
+We want to test if the expected squares of the residuals ($\hat{\mu_{i}}^2$) in the original model are related to one or more of the predictor variables. By "related" we could investigate if there is a linear relationship between an original model's residuals and its predictors. The linear equation involving the residuals with the predictor variables could be defined as:
+
+$$\hat{\mu}^2 = \delta_{0} + \delta_{1}x_{1} + \delta_{2}x_{2} + ... + \delta_{k}x_{k} + error$$
+
+Our null hypothesis is that there is no relationship between residuals and predictors, i.e.
+
+$$H_{0}: \delta_{0} = \delta_{1} = ... = \delta_{k} = 0$$
+
+In testing this hypothesis, we could set up a full and restricted model for an $F$-Test or a restricted model for an $LM$-test (Lagrange multiplier statistic).
+
+We'll follow Mr. Miller's lead and do both a test and a plot:
+
+a. Compute the Breusch-Pagan test for heteroskedasticity.
+
+b. A plot of the observations' OLS fitted values with their residual values.
+
+:::topic
+Performing the BP-test.
+:::
+
+```{r}
+bp_test_df <- RregressPkg::ols_BP_test_calc(
+  df = crime_dt,
+  formula_obj = ViolentC ~ Poverty + Single + Metro + White + HSGrad
+)
+```
+```{r}
+#| code-fold: true
+#| tbl-cap: A Breusch-Pagan test for Heteroskedasticity
+
+RplotterPkg::create_table(
+  x = bp_test_df,
+  container_width_px = 300
+)
+```
+
+::: takeaway
+Take Away: With $p$-values on the border of accepting the $H_{0}$ we will conclude based on the test that their is some relationship between residuals and predictors.
+:::
+
+```{r, warning=FALSE}
+#| code-fold: true
+#| fig-cap: Fitted values versus residuals
+
+RregressPkg::plot_fit_residuals(
+  df = crime_dt,
+  formula_obj = ViolentC ~ Poverty + Single + Metro + White + HSGrad,
+  x_title = "Fitted values",
+  y_title = "Residuals",
+  label_threshold = 0,
+  id_col = "State",
+  label_color = "black",
+  rot_y_tic_label = T
+)
+```
+
+::: takeaway
+Take Away: The plot shows some wide scattering of residuals from their expected value of zero.
+:::
+
+## Bootstrapping 
+
+:::topic
+Bootstrap the data set for 1000 resamples.
+:::
+
+Set the seed and call `modelr::bootstrap()` to create 1000 sets of predictor values.
+```{r}
+set.seed(8675309)
+boot_df <- modelr::bootstrap(crime_dt, 1000)
+boot_dt <- data.table::as.data.table(boot_df)
+```
+
+For each 1000 sets of predictor values, from a vectorized function compute the OLS estimate and return the model's coefficients as a list.
+Convert the list of lists of coefficients into a data.table using `data.table::rbindlist()`.
+```{r}
+make_cof <- function(x){
+  model_x <- lm(
+    formula = ViolentC ~ Poverty + Single + Metro + White + HSGrad,
+    data = x)
+  as.list(model_x$coefficients)
+}
+
+beta_lst <- lapply(boot_dt$strap, make_cof)
+beta_dt <- data.table::rbindlist(beta_lst)
+```
+
+We now have 1000 estimates of each of the coefficients.
+
+Create a "bootstrap" related data table of stats containing (with the exception of "(Intercept)") coefficient names and their values from the original OLS.
+```{r}
+boot_stats_dt <- data.table(
+  Source = "Boot",
+  Predictor = crime_ols$coef_df$Coef,
+  Beta = crime_ols$coef_df$Value
+) %>%
+.[Predictor != "(Intercept)"]
+```
+
+From the 1000 estimates of each coefficient in *beta_dt* compute the standard deviation (the coefficient's standard error). Add the standard errors for each coefficient as a column to *boot_stats_dt*.
+```{r}
+boot_stats_dt[, se := unlist(lapply(boot_stats_dt$Predictor, function(x) sd(beta_dt[[x]])))] 
+```
+
+Using the "se" values, add columns for the lower and upper confidence limits for the coefficients to *boot_stats_dt*.
+```{r}
+boot_stats_dt[, `:=`(
+  lwr = Beta - 1.645*se,
+  upr = Beta + 1.645*se
+)]
+```
+
+Create a "normal" related data table with stats from the original OLS coefficient values with their standard errors, lower and upper confidence limits.
+```{r}
+coef_dt <- data.table::as.data.table(crime_ols$coef_df) %>%
+  .[Coef != "(Intercept)"]
+normal_stats_dt <- data.table(
+  Source = "Normal",
+  Predictor = coef_dt$Coef,
+  Beta = coef_dt$Value,
+  se = coef_dt$SE,
+  lwr = coef_dt$Value - 1.625*coef_dt$SE,
+  upr = coef_dt$Value + 1.625*coef_dt$S
+)
+```
+
+Row bind the "bootstrap" and "normal" stats data tables and plot.
+```{r}
+stats_dt <- rbind(boot_stats_dt, normal_stats_dt) %>%
+  .[, `:=`(Predictor = as.factor(Predictor), Source = as.factor(Source))]
+```
+```{r}
+#| code-fold: true
+#| fig-width: 7
+#| fig-cap: A Comparison of Normal OLS and Bootstrapped Coefficient Standard Errors
+
+build_plot <- function(id, dt, predictor_names){
+  plot_dt <- dt[Predictor == predictor_names[[id]],]
+  hide_y_tics <- TRUE
+  if(id == 1 | id == 4){
+    hide_y_tics = FALSE
+  }
+  aplot <- RplotterPkg::create_scatter_plot(
+    df = plot_dt,
+    title = predictor_names[[id]],
+    aes_x = "Beta",
+    aes_y = "Source",
+    hide_y_tics = hide_y_tics,
+    rot_y_tic_label = T,
+    aes_CI_lwr = "lwr",
+    aes_CI_upr = "upr",
+    CI_show_errorbar = T,
+    CI_dir = "x",
+    CI_errorbar_width = 0.2,
+    CI_errorbar_color = "red",
+    pts_size = 3.5,
+    pts_color = "blue",
+    pts_fill = "blue"
+  )
+}
+plot_lst <- purrr::map(1:5,
+                        build_plot,
+                        dt = stats_dt,
+                        predictor_names = coef_dt$Coef
+)
+layout <- list(
+  plots = plot_lst,
+  rows = c(1, 1, 1, 2, 2),
+  cols = c(1, 2, 3, 1, 2)
+)
+
+RplotterPkg::multi_panel_grid(
+  layout = layout,
+  col_widths = c(6.5, 5, 5),
+  row_heights = c(5, 5)
+)
+```
+
+::: takeaway
+Take Away: As noted by Mr. Miller:
+:::
+
+> The ensuing plot suggests the standard errors most influenced by the heteroskedasicity in our model are those for the single family home variable and especially the percentage of the state that is white variable.

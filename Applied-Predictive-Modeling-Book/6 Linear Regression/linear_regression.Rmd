@@ -1,0 +1,188 @@
+---
+title: "Applied Predictive Modeling--Chapter 6 Linear Regression"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 3
+    css: ../../style.css
+params:
+  date: "!r Sys.Date()"
+---
+
+```{r,setup, include=FALSE, eval=TRUE}
+options(knitr.table.format = "html", width = 140)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 12, fig.height = 8)
+```
+
+<div>Author: Rick Dean</div>
+<div>Article date: `r params$date`</div>
+
+<div class="abstract">
+  <p class="abstract">Abstract</p>
+  The following notes/scripts/plots are inspired by Chapter 6 Linear Regression of [Applied Predictive Modeling](http://appliedpredictivemodeling.com/) by Max Kuhn and Kjell Johnson.
+</div>  
+
+
+```{r, warning=FALSE, message=FALSE}
+library(knitr)
+library(kableExtra)
+library(data.table)
+library(grid)
+library(gtable)
+library(RregressPkg)
+library(RplotterPkg)
+library(caret)
+library(AppliedPredictiveModeling)
+```
+
+## 6.1 Case Study
+Estimate the linear relationship between chemical structures and solubility. 
+
+### The data 
+The training data consists of 1267 compounds (951 in training set; 316 in test set) and a set of more understandable descriptors (*solTrainX* 951 observations; 228 variables):
+
+  a. 208 binary "fingerprints" that indicate presence of particular chemical substructure.
+  
+  b. 16 count descriptors, such as the number of bonds or number of bromine atoms.
+  
+  c. 4 continuous descriptors, such as molecular weight or surface area.
+  
+
+The solubility training data is a log10 vector of solubility values(*solTrainY* 951 observations; 1 variable *solTrainY*)
+
+```{r}
+data(solubility, package = "AppliedPredictiveModeling")
+sol_train_dt <- data.table::as.data.table(solTrainX)
+sol_test_dt <- data.table::as.data.table(solTestX)
+sol_train_dt[, Solubility := solTrainY]
+```
+
+<div class="task">Task: Plot molecular weight vs solubility</div>
+```{r}
+RplotterPkg::create_scatter_plot(
+  df = sol_train_dt,
+  aes_x = "MolWeight",
+  aes_y = "Solubility",
+  x_title = "Molecular Weight",
+  y_title = "Solubility (log)",
+  pts_size = 2.0
+)
+```
+
+<div class="task">Task: Create a boxplot of FP100 distribution of solubility.</div>
+
+```{r}
+dt <- sol_train_dt[, .(FP100 = FP100)]
+dt[, `:=`(id = 1:length(solTrainY), Solubility = solTrainY, Status = fifelse(dt$FP100 == 0,"absent","present"))]
+dt[, Status := factor(dt$Status)]
+
+RplotterPkg::create_box_plot(
+  df = dt,
+  aes_x = "Status",
+  aes_y = "Solubility",
+  title = "Distribution of Solubility",
+  subtitle = 'For absence and presence of FP100 "fingerprint"',
+  show_outliers = T,
+  label_outlier_var = "id"
+)
+```
+
+<div class="task">Task: Create scatterplots of the 20 non-binary descriptors.</div>
+```{r, fig.width=14, fig.height=18}
+fingerprint_names_v <- grep("FP", names(sol_train_dt), value = T)
+dt <- sol_train_dt[, !..fingerprint_names_v]
+
+RplotterPkg::multi_scatter_plot(
+  df = dt,
+  variables = setdiff(names(dt),"Solubility"),
+  aes_y = "Solubility",
+  columns = 4,
+  col_width = 3.5,
+  row_height = 3.5
+)
+```
+
+<div class="task">Task: Show correlations among 20 non-binary descriptors.</div>
+```{r, fig.width=14, fig.height=14}
+fingerprint_names_v <- grep("FP", names(sol_train_dt), value = T)
+not_vars_v <- c(fingerprint_names_v, "Solubility")
+dt <- sol_train_dt[, !..not_vars_v]
+
+cor_vars_mt <- stats::cor(dt)
+RregressPkg::plot_correlations(
+  corr = cor_vars_mt,
+  cluster_corr = T,
+  scale_colors = c("red","blue")
+)
+```
+
+## 6.2 Linear Regression
+
+## 6.3 Linear Regression for Solubility Data
+
+### Identify predictors with low collinarity
+
+```{r}
+dt <- sol_train_dt[,!c("Solubility")]
+cor_vars_mt <- stats::cor(dt)
+results_lst <- RregressPkg::low_predictor_collinearity(
+  cor_vars_mt,
+  threshold = 0.9
+)
+
+```
+
+### Fit a linear model to the reduced predictors
+```{r}
+set.seed(100)
+indx <- caret::createFolds(solTrainY, returnTrain = TRUE)
+ctrl <- caret::trainControl(method = "cv", index = indx)
+
+train_dt <- sol_train_dt[,!c("Solubility")]
+predictors_v <- results_lst$predictors
+train_dt <- train_dt[, ..predictors_v]
+test_dt <- sol_test_dt[, ..predictors_v]
+sol_lm <- caret::train(
+  x = train_dt, 
+  y = solTrainY,
+  method = "lm",
+  trControl = ctrl)
+```
+
+### Plot Observed vs Predicted and Residuals
+```{r,fig.width=13, fig.height=9}
+fit_dt <- data.table::data.table(
+  Observed = solTrainY,
+  Predicted = sol_lm$finalModel$fitted.values,
+  Residual = sol_lm$finalModel$residuals
+)
+
+plot_1 <- RplotterPkg::create_scatter_plot(
+  df = fit_dt,
+  aes_x = "Predicted",
+  aes_y = "Observed",
+  rot_y_tic_label = T
+)
+plot_2 <- RplotterPkg::create_scatter_plot(
+  df = fit_dt,
+  aes_x = "Predicted",
+  aes_y = "Residual",
+  rot_y_tic_label = T
+)
+
+layout <- list(
+  plots = list(plot_1, plot_2),
+  rows = c(1,1),
+  cols = c(1,2)
+)
+col_widths <- c(6,6)
+row_heights <- 6
+
+RplotterPkg::multi_panel_grid(
+  layout = layout,
+  col_widths = col_widths,
+  row_heights = row_heights
+)
+```
+
+

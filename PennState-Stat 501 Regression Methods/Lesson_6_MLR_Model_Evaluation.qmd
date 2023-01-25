@@ -1,0 +1,602 @@
+---
+title: "PennState Stat 501 Lesson 6 - MLR Model Evaluation"
+author: "Rick Dean"
+format:
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: false
+    number-offset: 2
+    self-contained: true
+    smooth-scroll: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 5
+    fig-height: 5
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    minimal: false
+    css: ../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "The following notes, and R scripts are based on the online course [PennState Lesson 6 MLR Model Evaluation](https://online.stat.psu.edu/stat501/lesson/6)"
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(data.table)
+library(magrittr)
+library(ggplot2)
+library(here)
+library(RregressPkg)
+library(RplotterPkg)
+```
+
+## 6.1 Three types of hypotheses
+
+Research questions:
+
+a. Is a regression model containing at least one predictor useful in predicting the response:
+
+$H_{0}: \beta_{1} = \beta_{2} = \beta_{3}...\beta_{k} = 0$
+
+$H_{A}:$ At least on $\beta_{i} \ne 0$ (for $i$ = 1,2,3...k)
+
+b. Is a specific predictor $\beta_{i}$ not equal to zero:
+
+$H_{0}: \beta_{i} = 0$
+
+$H_{A}: \beta_{i} \ne 0$
+
+c. Is a subset(more than one but not all) of the predictors simultaneously zero:
+
+$H_{0}: \beta_{p} = \beta_{p+1} = \beta_{p+2} = 0$
+
+$H_{A}:$ At least one $\beta_{i} \ne 0$ (for i = p,p+1,p+2)
+
+:::topic
+Example 6-1: Heart attacks in rabbits
+:::
+
+Primary research question:
+
+> Does the mean size of the infarcted area differ among the three treatment groups -- no cooling, early cooling, and late cooling -- when controlling for the size of the region at risk for infarction
+
+The regression model:
+
+$$area_{i} = \beta_{intercept} + \beta_{nocool}\cdot x_{i1} + \beta_{early}\cdot x_{i2}  + \beta_{late}\cdot x_{i3} + \epsilon_{i}$$
+where the predictors are binary variables with values 0 or 1 for the absence or presence of the treatment.  The independent error terms $\epsilon_{i}$ follow a normal distribution with mean 0 and equal variance $\sigma^{2}$.
+
+
+Read the data.
+```{r}
+data_path <- file.path(here::here(), "PennState-Stat 501 Regression Methods",  "data/coolhearts.txt")
+coolhearts_dt <- data.table::fread(data_path) %>% 
+.[, .(Infect = `Inf`, Area = Area, Early = X2, Late = X3, Group = Group)]
+```
+
+Estimate the OLS.
+```{r}
+coolhearts_ols_lst <- RregressPkg::ols_calc(
+  df = coolhearts_dt,
+  formula_obj = Infect ~ Area + Early + Late,
+  print_detail = T
+)
+```
+
+Update `coolhearts_dt`.
+```{r}
+coolhearts_dt[, Group := fcase(
+  Group == 1, "Early",
+  Group == 2, "Late",
+  Group == 3, "Control"
+)] %>% 
+.[, Fit := coolhearts_ols_lst$fitted_val]
+```
+
+
+Plot the three conditions.
+```{r}
+#| code-fold: true
+#| fig-cap: Infarcted vs Area, Grouping by cooling early/late/control of rabbits
+
+RplotterPkg::create_scatter_plot(
+  df = coolhearts_dt,
+  aes_x = "Area",
+  aes_y = "Infect",
+  aes_fill = "Group",
+  rot_y_tic_label = T,
+  pts_size = 2,
+  x_title = "Size of Area at Risk(grams)",
+  y_title = "Size of Infarcted Area(grams)",
+  x_major_breaks = seq(0.25, 1.5, 0.25),
+) + geom_line(aes(x = Area, y = Fit, color = Group)) +
+  guides(color = "none") +
+  annotate("text",x=.45,y=.25,label="Control",color="red") +
+  annotate("text",x=1.45,y=.64,label="Late",color="darkgreen") +
+  annotate("text",x=.65,y=-.04,label="Early",color="darkblue") +
+  scale_fill_manual(values = c("red","darkblue","darkgreen")) +
+  scale_color_manual(values = c("red","darkblue","darkgreen"))
+
+
+```
+
+## 6.2 General linear F-test
+
+The Full Model
+
+> The "full model", which is also sometimes referred to as the "unrestricted model", is the model thought to be the most appropriate for the data.
+
+The Reduced Model
+
+> The "reduced model" which is sometimes referred to as the "restricted model" is the model described by the null hypothesis $H_{0}$.
+
+:::topic
+F-Statistic Test
+:::
+
+The "general linear F-test" involves three basic steps:
+
+a. Define a larger **full model** or **unrestricted model** (one with more parameters)
+
+b. Define a smaller **reduced model** or **restricted model** (one with fewer parameters)
+
+c. Use the **F-statistic** to decide whether or not to reject the smaller reduced model in favor of the larger full model
+
+The $F$-statistic is defined as follows:
+
+$$ F = \left ( \frac{SSE_{r} - SSE_{ur}}{df_{r} - df_{ur}} \right ) \div \left ( \frac{SSE_{ur}}{df_{ur}} \right ) $$
+Note q = $df_{r} - df_{ur}$ = the difference in the number of predictors between the full and reduced models
+
+An alternative definition from $F$ involves the $R^2$ values from the full and reduced models -- known as the **R-squared form of the F statistic**:
+$$F = \frac{(R_{ur}^2 - R_{r}^2)/q}{(1 - R_{ur}^2)/df_{ur}}$$
+
+We use the general linear $F$-statistic to decide whether or not:
+
+a. to reject the null hypothesis $H_{0}$: the reduced model
+
+b. in favor of the alternative hypothesis $H_{A}$: the full model
+
+:::topic
+Example: Alcohol and muscle strength data
+:::
+
+The Hypotheses'---
+
+    Reduced model: $H_{0}: y_{strength} = \beta_{intercept} + \epsilon$
+    
+    Full model: $H_{A}: y_{strength} = \beta_{intercept} + \beta_{alcohol} + \epsilon$
+
+Set the data.
+```{r}
+data_path <- file.path(here::here(), "PennState-Stat 501 Regression Methods","data/alcoholarm.txt")
+alchoholarm_dt <- data.table::fread(data_path)
+```
+
+Estimate the reduced and full models.
+```{r}
+# reduced_ols <- mean(alchoholarm_dt$strength)
+# reduced_sse <- sum((alchoholarm_dt$strength - reduced_ols)^2)
+# using only the intercept in the model
+reduced_ols <- RregressPkg::ols_calc(
+  df = alchoholarm_dt,
+  formula_obj = strength ~ 1
+)
+reduced_sse <- reduced_ols$sse
+
+full_ols <- RregressPkg::ols_calc(
+  df = alchoholarm_dt,
+  formula_obj = strength ~ alcohol
+)
+full_sse <- full_ols$sse
+```
+
+Display the reduced and full models.
+```{r}
+#| code-fold: true
+#| fig-cap: Reduced and Full Model of Alcohol vs Strength
+#| fig-width: 8
+
+plot_df <- data.frame(
+  Alcohol = alchoholarm_dt$alcohol,
+  Strength = alchoholarm_dt$strength,
+  Strength_R = reduced_ols$fitted_val,
+  Strength_F = full_ols$fitted_val
+)
+
+reduced_plot <- RplotterPkg::create_scatter_plot(
+  df = plot_df,
+  aes_x = "Alcohol",
+  aes_y = "Strength",
+  subtitle = paste0("Reduced: SSE = ",round(reduced_sse,digits = 2)),
+  x_title = "Alcohol",
+  y_title = "Strength",
+  rot_y_tic_label = T
+) + geom_line(aes(y = Strength_R), color="red")
+
+full_plot <- RplotterPkg::create_scatter_plot(
+  df = plot_df,
+  aes_x = "Alcohol",
+  aes_y = "Strength",
+  subtitle = paste0("Full: SSE = ",round(full_sse, digits = 2)),
+  x_title = "Alcohol",
+  rot_y_tic_label = T,
+  y_title = NULL,
+  hide_y_tics = T
+) + geom_line(aes(y = Strength_F), color="red")
+
+layout <- list(
+  plots = list(reduced_plot, full_plot),
+  rows = c(1,1),
+  cols = c(1,2)
+)
+RplotterPkg::multi_panel_grid(
+  layout = layout,
+  col_widths = c(8.5,8),
+  row_heights = 8
+)
+```
+
+Show the ANOVA from the full and reduced models.
+```{r}
+#| code-fold: true
+#| tbl-cap: Full Model ANOVA
+
+RplotterPkg::create_table(
+  x = full_ols$anova_df,
+  container_width_px = 400
+)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: Reduced Model ANOVA
+
+RplotterPkg::create_table(
+  x = reduced_ols$anova_df,
+  container_width_px = 400
+)
+```
+
+The resulting F value.
+
+$F = \frac{MSR_{fullmodel}}{MSE_{fullmodel}} = \frac{504.04/1}{720.27/48} = \frac{504.044}{15.006}=33.59$
+
+## 6.3 Sequential (or extra) sums of squares
+
+> The numerator of the general linear F-statistic ($SSE_{restricted} - SSE_{unstricted}$ is what is referred to as a "sequential sum of the squares." It can be viewed in either of two ways:
+
+a. It is the reduction in the **error sum of the squares** (SSE) when one or more predictor variables are added to the model
+
+b. It is the increase in the **regression sum of the squares** (SSR) when one or more predictors are added to the model
+
+:::topic
+Try it!
+:::
+
+> These problems review the concept of "sequential(or extra) sums of squares."
+
+Using the brain size and body size study data.
+Set up the data.
+```{r}
+data_path <- file.path(here::here(), "PennState-Stat 501 Regression Methods","data/iqsize.txt")
+iqsize_dt <- data.table::fread(data_path)
+```
+
+1. $X_{Brain}$ as the only predictor:
+```{r}
+brain_ols <- RregressPkg::ols_calc(
+  df = iqsize_dt,
+  formula_obj = PIQ ~ Brain
+)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: PIQ ~ Brain
+
+RplotterPkg::create_table(
+  x = brain_ols$anova_df,
+  container_width_px = 400
+)
+```
+$SSE(X_{brain})=16197$  $SSR(X_{brain})=2697$  $SSTO=18895$
+
+2. Fit with regressors (in order) $X_{Brain}$ and $X_{Height}$
+```{r}
+brain_height_ols <- RregressPkg::ols_calc(
+  df = iqsize_dt,
+  formula_obj = PIQ ~ Brain + Height
+)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: PIQ ~ Brain + Height
+
+RplotterPkg::create_table(
+  x = brain_height_ols$anova_df,
+  container_width_px = 400
+)
+```
+
+$SSE(X_{brain},X_{height})=13322$  $SSR(X_{brain},X_{height})=5573$  $SSTO=18895$
+
+3. Sequential sum of the squares:
+Of adding Height where Brain is the only predictor SSR(Height|Brain)
+
+SSR(Height|Brain) = Reduction in error sum of the squares = SSE(Brain) - SSE(Brain,Height) =  16197 - 13322 = 2875
+
+Or
+
+SSR(Height|Brain) = Increase in regression sum of the squares = SSR(Brain,Height) - SSR(Brain) = 5573 - 2697 = 2876
+
+4. (MiniTab question)
+
+5. Order matters -- add the predictors in the reverse order -- $X_{Height}$ then $X_{Brain}$:
+```{r}
+height_ols <- RregressPkg::ols_calc(
+  df = iqsize_dt,
+  formula_obj = PIQ ~ Height
+)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: PIQ ~ Height
+
+RplotterPkg::create_table(
+  x = height_ols$anova_df,
+  container_width_px = 400
+)
+```
+
+
+Now add in the Brain to the model:
+```{r}
+height_brain_ols <- RregressPkg::ols_calc(
+  df = iqsize_dt,
+  formula_obj = PIQ ~ Height + Brain
+)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: PIQ ~ Height + Brain
+
+RplotterPkg::create_table(
+  x = height_brain_ols$anova_df,
+  container_width_px = 400
+)
+```
+
+
+The sequential sums of the squares:
+
+SSR(Brain|Height) = reduction in sum of squares of errors = SSE(Height) - SSE(Brain|Height) = 18731 - 13322 = 5409
+
+Or
+ 
+SSR(Brain|Height) = increase in sum of squares of regression = SSR(Brain|Height) - SSR(Height) = 5573 - 164 = 5409
+
+6. Sequential sums of the squares for any number of predictors. Build a model in order: $X_{Brain}$, $X_{Height}$, $X_{Weight}$ 
+
+Start with only $X_{Brain}$:
+```{r}
+brain_ols <- RregressPkg::ols_calc(
+  df = iqsize_dt,
+  formula_obj = PIQ ~ Brain
+)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: PIQ ~ Brain
+
+RplotterPkg::create_table(
+  x = brain_ols$anova_df,
+  container_width_px = 400
+)
+```
+
+
+Add in $X_{Height}$:
+```{r}
+brain_height_ols <- RregressPkg::ols_calc(
+  df = iqsize_dt,
+  formula_obj = PIQ ~ Brain + Height
+)
+```
+ 
+```{r}
+#| code-fold: true
+#| tbl-cap: PIQ ~ Brain + Height
+
+RplotterPkg::create_table(
+  x = brain_height_ols$anova_df,
+  container_width_px = 400
+)
+```
+ 
+ 
+Sequential increase in regression sum of squares: 
+
+SSR(Height|Brain) = 5573 - 2697 = 2876
+
+Now add in $X_{Weight}$ to the model:
+```{r}
+brain_height_weight_ols <- RregressPkg::ols_calc(
+  df = iqsize_dt,
+  formula_obj = PIQ ~ Brain + Height + Weight
+)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: PIQ ~ Brain + Height + Weight
+
+RplotterPkg::create_table(
+  x = brain_height_weight_ols$anova_df,
+  container_width_px = 400
+)
+```
+
+
+Sequential increase in regression sum of squares:
+
+SSR(Weight|Brain,Height) = 5572.744 - 5572.741 = 0.003
+
+7. The above was **one-degree-of-freedom** sequential sums of squares -- adding predictors one at a time -- used for testing $H_{0}: \beta_{1} = 0$
+
+**two-degree-of-freedom** sequential sums of squares -- adding two predictors at a time:
+Start with only $X_{Brain}$:
+```{r}
+brain_ols <- RregressPkg::ols_calc(
+  df = iqsize_dt,
+  formula_obj = PIQ ~ Brain
+)
+
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: PIQ ~ Brain
+
+RplotterPkg::create_table(
+  x = brain_ols$anova_df,
+  container_width_px = 400
+)
+```
+
+
+Now add in $X_{Height}$ and $X_{Weight}$:
+```{r}
+brain_height_weight_ols <- RregressPkg::ols_calc(
+  df = iqsize_dt,
+  formula_obj = PIQ ~ Brain + Height + Weight
+)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: PIQ ~ Brain + Height + Weight
+
+RplotterPkg::create_table(
+  x = brain_height_weight_ols$anova_df,
+  container_width_px = 400
+)
+```
+
+Sequential sum squares:
+
+SSR(Height,Weight|Brain) = increase in regression sum of the squares = 5573 - 2697 = 2876
+
+## 6.4 Hypothesis tests for the slopes
+
+Returning to the 3 hypothesis in section 6.1 above(a.,b.,c.), we will test each hypothesis using *coolhearts.txt* data and the general linear $F$-statistic:
+$$ F = \left ( \frac{SSE_{r} - SSE_{ur}}{df_{r} - df_{ur}} \right ) \div \left ( \frac{SSE_{ur}}{df_{ur}} \right ) $$
+
+Using the coolhearts data set, read the data.
+```{r}
+data_path <- file.path(here::here(), "PennState-Stat 501 Regression Methods","data/coolhearts.txt")
+coolhearts_dt <- data.table::fread(data_path)
+coolhearts_dt <- coolhearts_dt[, .(Infect = `Inf`, Area = Area, Early = X2, Late = X3, Group = Group)]
+```
+
+:::topic
+$H_{0}$: Testing all slope parameters equal 0
+:::
+
+From 6.1, a. $H_{1}$: Is at least one slope parameter non-zero?
+
+$H_{0}: \beta_{Area} = \beta_{Early} = \beta_{Late} = 0$
+
+$H_{A}:$ At least one $\beta_{j} \ne 0$ (for $j$ = Area,Early,Late)
+
+Compute the $F$ value.
+```{r}
+F_lst <- RregressPkg::ols_restricted_model(
+  df = coolhearts_dt,
+  ur_formula_obj = Infect ~ Area + Early + Late,
+  r_formula_obj = Infect ~ 1,
+  confid_level = 0.99
+)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: Is at least one slope parameter non-zero?
+
+RplotterPkg::create_table(
+  x = F_lst$F_df,
+  container_width_px = 400
+)
+```
+
+The $F$ value is `r F_lst$F_df$F.Value` with a critical value at 99% probability of `r F_lst$F_df$Critical`. Thus there is a least one significant predictor.
+
+:::topic
+$H_{0}$: Testing if one slope parameter is 0
+:::
+
+From 6.1, b. $H_{1}$: Is a specific predictor not equal to zero?
+
+$H_{0}: \beta_{Area} = 0$
+
+$H_{A}: \beta_{Area} \ne 0$
+
+Compute the $F$ value.
+```{r}
+F_lst <- RregressPkg::ols_restricted_model(
+  df = coolhearts_dt,
+  ur_formula_obj = Infect ~ Area + Early + Late,
+  r_formula_obj = Infect ~ Early + Late,
+  confid_level = 0.99
+)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: Is a specific predictor not equal to zero?
+
+RplotterPkg::create_table(
+  x = F_lst$F_df,
+  container_width_px = 400
+)
+```
+
+The $F$ value is `r F_lst$F_df$F.Value` with a critical value at 99% probability of `r F_lst$F_df$Critical`. Thus *Area* is a significant predictor.
+
+:::topic
+Testing a subset of slope parameters is 0
+:::
+
+From 6.1, c. $H_{1}$: Is a subset(more than one but not all) of the predictors simultaneously zero?
+
+$H_{0}: \beta_{Early} = \beta_{Late} = 0$
+
+$H_{A}:$ At least one $\beta_{j} \ne 0$ (for $j$ = Early, Late)
+
+Compute the $F$ value.
+```{r}
+F_lst <- RregressPkg::ols_restricted_model(
+  df = coolhearts_dt,
+  ur_formula_obj = Infect ~ Area + Early + Late,
+  r_formula_obj = Infect ~ Area,
+  confid_level = 0.99
+)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: Is a subset(more than one but not all) of the predictors simultaneously zero?
+
+RplotterPkg::create_table(
+  x = F_lst$F_df,
+  container_width_px = 400
+)
+```
+
+The $F$ value is `r F_lst$F_df$F.Value` with a critical value at 99% probability of `r F_lst$F_df$Critical`. Thus there is a least one significant predictor in the subset. Or we can say that cooling has a significant influence on the extent of damage that occurs after taking into account the size of the region (*Area*).

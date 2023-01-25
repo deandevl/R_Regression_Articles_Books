@@ -1,0 +1,266 @@
+---
+title: "Using dbinom and pbinom from R with Baseball Stats"
+author: "Rick Dean"
+format:
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: false
+    number-offset: 10
+    self-contained: true
+    smooth-scroll: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 5
+    fig-height: 5
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    minimal: false
+    css: ../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "The article by Joshua Cook titled Riddler: [Can You Beat MLB Recods?](https://joshuacook.netlify.app/post/riddler-beat-mlb-records/) inspired the content in this R markdown document."
+---
+
+```{r}
+library(ggplot2)
+library(data.table)
+library(RplotterPkg)
+set.seed(123)
+```
+
+# 1 Using dbinom and pbinom from R with Baseball Stats
+
+## 1.1 First question
+If you have four at-bats per game, what are your chances of batting at least .400 over the course of the *60-game* season?
+
+:::topic
+First Solution.
+:::
+
+The solution is just the probability of observing a batting average of 0.400 or greater. The first value is computed using dbinom() and the second cumulative probability is calculated using pbinom(), setting lower.tail = FALSE to get the tail above 0.400.
+
+Observing a batting average of 0.400.
+```{r}
+num_at_bats <- 60 * 4
+real_batting_average <- 0.350
+target_batting_average <- 0.400
+
+prob_at_400 <- stats::dbinom(
+  x = target_batting_average * num_at_bats,
+  size = num_at_bats,
+  prob = real_batting_average
+  )
+```
+`stats::dbinom()` gives the density.
+The probability of observing a batting average of 0.400: `r prob_at_400`
+
+Observing a batting average greater than 0.400.
+```{r}
+prob_above_400 <- stats::pbinom(
+  q = target_batting_average * num_at_bats,
+  size = num_at_bats,
+  prob = real_batting_average,
+  lower.tail = FALSE
+)
+prob_at_above_400 <- prob_at_400 + prob_above_400
+```
+`stats::pbinom()` gives the distribution function.
+
+The probability of observing a batting average above 0.400: `r prob_above_400`
+
+Total probability of observing a batting average at or above 0.400: `r prob_at_above_400`
+
+There is a 6.1% chance of reaching a batting average of 0.400 in the shorter season
+
+## 1.2 Second question
+If you have four at-bats per game, what are your chances of batting at least .400 over the course of the *162-game* season?
+
+:::topic
+Second Solution.
+:::
+
+Only the probability of a batting average greater than 0.400 needs to be
+calculated (because .400 * 162 * 4 is a non-integer value).
+
+```{r}
+num_at_bats <- 162 * 4
+real_batting_average <- 0.350
+target_batting_average <- 0.400
+
+prob_above_400_162_games <- stats::pbinom(
+  q = target_batting_average * num_at_bats,
+  size = num_at_bats,
+  prob = real_batting_average,
+  lower.tail = FALSE
+)
+```
+With 162 games, there is a probability `r prob_above_400_162_games * 100`% of achieving a batting average of at least 0.400.
+
+## 1.3 Simulation solution
+The solution to this riddle could also be found by simulating a whole
+bunch of seasons with the real batting average of 0.350 and then just
+counting how frequently the simulations resulted in an observed batting
+average of 0.400.
+
+:::topic
+Solution for 1 simulation(season).
+:::
+
+A single season can be simulated using the `stats::rbinom(n,size,prob)` function which generates random deviates.
+
+* Arguments for the function include:
+  + n = number of seasons to simulate(i.e. 1)
+  + size = number of trials or at bats(i.e. 60 * 4)
+  + real_batting_average(i.e. .350)
+ 
+ The returned value is a sampled number of hits("successes") over the season from the binomial distribution. Dividing this number by the number of at bats gives the simulated batting average for one season.
+ 
+Sampled number of hits("successes") over one season(hits_1) from the binomial distribution.
+
+```{r}
+num_at_bats <- 60 * 4
+real_batting_average <- 0.350
+
+hits_1 <- stats::rbinom(
+  n = 1,
+  size = num_at_bats,
+  prob = real_batting_average
+)
+```
+ 
+The simulated hits for 1 season: `r hits_1`
+
+Dividing the number of simulated hits by the number at bat gives the season average
+ 
+```{r}
+batting_average_1 <- hits_1/num_at_bats
+```
+
+The simulated average batting for 1 season: `r batting_average_1`
+ 
+:::topic
+Solution for 10000 simulations (seasons)
+:::
+
+Taking n = 10000 simulations:
+
+```{r}
+hits_10000 <- stats::rbinom(
+  n = 10000, # 10000 simulations
+  size = num_at_bats,
+  prob = real_batting_average
+)
+batting_averages <- hits_10000/num_at_bats
+batting_average_10000 <- mean(batting_averages)
+```
+The simulated average batting across 10000 seasons: `r batting_average_10000` which is close to *real_batting_average*.
+
+:::topic
+Plot the density of batting averages across 10000 seasons.
+:::
+
+```{r}
+#| code-fold: true
+#| fig-cap: Simulated Batting Averages Across 10000 Seasons
+
+target_batting_average <- 0.400
+batting_averages_dt <- data.table(
+  x = batting_averages
+)
+RplotterPkg::create_density_plot(
+  df = batting_averages_dt,
+  aes_x = "x",
+  x_title = "10000 simulated season batting averages",
+  y_title = "probability density",
+  density_fill = "black",
+  density_alpha = 0.2,
+  x_limits = c(0.2,0.5),
+  x_major_breaks = seq(0.2, 0.5, 0.05),
+  y_major_breaks = seq(0.0, 13.5, 1.5),
+  rot_y_tic_label = TRUE,
+  plot_obs = TRUE,
+  plot_obs_jitter = TRUE
+) + 
+  geom_vline(xintercept = target_batting_average, color="tomato", lty = 2, size = 1.2)
+```
+
+:::topic
+Probability of a batting average greater than 0.400 from the simulation
+:::
+
+```{r}
+prob_at_above_400_simulation <- mean(batting_averages >= 0.40)
+```
+From the simulation the average batting probabilities at or greater than .400 is `r prob_at_above_400_simulation` which is close to the above actual answer of `r prob_at_above_400`.
+
+## 1.4 Why the length of the season matters to the distribution of hits
+
+Consider `stats::rbinom(n,size,prob)` again where we simulate a series of "at bats" for one season. 
+
+* Arguments for the function include:
+  + n = number of "at bats" to simulate(i.e. 60*4 for one season)
+  + size = the number of trials(i.e. 1)
+  + prob = real_batting_average(i.e. .350)
+
+The function `stats::rbinom(n,size,prob)` generates a vector of binomial distributed random variables given a vector length *n*, number of trials *size*, and probability of success on each trial *prob*.
+
+```{r}
+set.seed(123)
+simulated_season_at_bat <- stats::rbinom(n = 60*4, size = 1, prob = 0.350)
+```
+The first 20 "at bats": `r simulated_season_at_bat[1:20]`
+
+:::topic
+Plot the cumulative record of hits over the one season.
+:::
+
+```{r}
+#| code-fold: true
+#| fig-cap: Running batting average over a simulated season
+season_hits_dt <- data.table(
+  hits = simulated_season_at_bat,
+  at_bat = 1:length(simulated_season_at_bat),
+  cum_hits = cumsum(simulated_season_at_bat),
+  batting_avg = cumsum(simulated_season_at_bat)/1:length(simulated_season_at_bat)
+)
+
+RplotterPkg::create_scatter_plot(
+  df = season_hits_dt,
+  aes_x = "at_bat",
+  aes_y = "cum_hits",
+  aes_color = "batting_avg",
+  x_title = "At Bat Number",
+  y_title = "Cumulative Hits",
+  y_major_breaks = seq(0, 90, 10),
+  connect = TRUE,
+  show_pts = FALSE,
+  line_width = 1.6
+) + ggplot2::scale_color_viridis_c() +
+  theme(legend.position = c(0.85, 0.35)) +
+  labs(color = "batting average")
+```
+
+The author states:
+> The coloring shows how the batting average was more volatile when there were fewer at bats.
+
+## 1.5 Plot the running batting average over multiple simulated seasons
+```{r}
+simulate_season_at_bat_fun <- function(num_at_bat){
+  simulated_season_at_bat <- stats::rbinom(n = num_at_bat, size = 1, prob = 0.350)
+  
+  season_hits_dt <- data.table(
+    hits = simulated_season_at_bat,
+    at_bat = 1:length(simulated_season_at_bat),
+    cum_hits = cumsum(simulated_season_at_bat),
+    batting_avg = cumsum(simulated_season_at_bat)/1:length(simulated_season_at_bat)
+  )
+  return(season_hits_dt)
+}
+
+
+```
+

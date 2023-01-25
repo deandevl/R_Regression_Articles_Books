@@ -1,0 +1,65 @@
+---
+title: "How to Make the Most of Regression: Standardization and Post-Estimation Simulation"
+author: "Rick Dean"
+format:
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: true
+    number-offset: 0
+    self-contained: true
+    smooth-scroll: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 5
+    fig-height: 5
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    minimal: false
+    css: ../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "The following are notes and R scripts inspired by the article [How to Make the Most of Regression: Standardization and Post-Estimation Simulation](http://svmiller.com/blog/2020/04/post-estimation-simulation-trump-vote-midwest/) by Steve Miller."
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(data.table)
+library(ggrepel)
+library(here)
+library(ggplot2)
+library(RplotterPkg)
+library(RregressPkg)
+```
+
+# Standardization and Post-Estimation Simulation
+
+## The data and first model
+
+We'll be using the 2016 Cooperative Congressional Election Study (CCES) data.
+
+Load the data.
+```{r}
+data_path <- file.path(here::here(), "Miller", "data", "TV16.rda")
+load(file = data_path)
+tv16_dt <-  data.table::as.data.table(TV16)
+```
+
+Using a subset of midwest states (Indiana, Michigan, Ohio, Pennsylvania, Wisconsin) amd white respondents.
+```{r}
+tv16_dt <- tv16_dt[state %in% c("Indiana","Michigan","Ohio","Pennsylvania","Wisconsin") & racef == "White", .(TrumpVote = votetrump, Age = age, Female = female, CollegeEdu = collegeed, HouseholdInc = famincr, Partisanship = pid7na, Ideology = ideo, BornAgainChris = bornagain, CognitiveRace = lcograc, EmpatheticRace = lemprac)]
+```
+
+Create the first model.
+```{r}
+model_1 <- stats::glm(TrumpVote ~ Age + Female + CollegeEdu + HouseholdInc + Partisanship + Ideology + BornAgainChris + CognitiveRace + EmpatheticRace, data = tv16_dt, family = binomial(link = "logit"), na.action = na.exclude)
+```
+
+
+
+
+
+
+

@@ -1,0 +1,171 @@
+---
+title: "Chapter 3 Data Pre-processing Exercises"
+output: 
+  html_document:
+    toc: yes
+    toc_depth: 3
+    css: ../../../style.css
+params:
+  date: !r Sys.Date()    
+---
+
+```{r,setup, include=FALSE, eval=TRUE}
+options(knitr.table.format = "html")
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 12, fig.height = 8)
+```
+
+<div>Author: Rick Dean</div>
+<div>Article date: `r params$date`</div>
+
+<div class="abstract">
+  <p class="abstract">Abstract</p>
+The following notes/scripts/plots are inspired by Chapter 3 Data Pre-processing Exercises 3-1 of [Applied Predictive Modeling](http://appliedpredictivemodeling.com/) by Max Kuhn and Kjell Johnson.
+</div>
+
+```{r, message = FALSE,warning = FALSE}
+library(knitr)
+library(kableExtra)
+library(data.table)
+library(ggplot2)
+library(ggrepel)
+library(caret)
+library(mlbench)
+library(AppliedPredictiveModeling)
+library(e1071)
+library(grid)
+library(gtable)
+library(RregressPkg)
+library(RplotterPkg)
+```
+
+## The Glass Dataset
+
+### (a) Predictor variable visualization
+
+<div class="task">Task: Set up Glass data set. </div>
+
+1. Initialize data.table with Glass data set:
+```{r}
+data(Glass, package = "mlbench")
+glass_dt <- data.table::setDT(Glass)
+glass_dt[,RI := round(RI,2)]
+head(glass_dt)
+```
+2. Add an *id* variable to the data.table:
+```{r}
+glass_dt[, id := rownames(Glass)]
+data.table::setcolorder(glass_dt, neworder = c("id", "Type"))
+```
+
+<div class="task">Task: Plot the histograms of the predictor variables. </div>
+
+```{r, fig.height = 12, fig.width = 12}
+glass_histo_plots <- RplotterPkg::multi_histogram_plot(
+  df = glass_dt,
+  variables = colnames(glass_dt)[3:11],
+  columns = 3,
+  row_height = 3.5,
+  title = "Distribution of 9 Glass Predictor Variables"
+)
+```
+
+The variable *RI* appears to have a constant value. Others appear to be severely skewed with *Ba* and *Fe* having values of 0.0.
+
+<div class="task">Task: Show the correlations among all predictors with the exception of above three.</div>
+
+1. Calculate the correlations using `stats::cor()`:
+```{r}
+glass_dt <- glass_dt[, !c("id","Type","RI","Ba","Fe")]
+glass_cor_mt <- stats::cor(glass_dt)
+```
+
+2. Plot the correlations in a heatmap:
+```{r}
+RregressPkg::plot_correlations(
+  corr = glass_cor_mt,
+  title = "Correlations Among Glass Dataset",
+  scale_colors = c("red", "green")
+)
+```
+
+### (b) Outliers in the data
+
+<div class="task">Task: There seem to be some notable correlations between *Al*/*Mg*, *Ca*/*Mg*, *K*/*Al* and *K*/*Ca*. Show a "matrix scatter" plot involving these variables.
+```{r, fig.height=10}
+RregressPkg::plot_matrix_scatter(
+  df = glass_dt[, .(Al,Mg,Ca,K)],
+  title = "Notable Glass Correlations",
+  rot_y_tic_label = T
+)
+```
+
+There appear to be outliers in nearly all the relationships.
+
+<div class="task">Task: Compute the skewness for some of the variables. </div>
+```{r}
+dt <- data.table::data.table(
+  Na = e1071::skewness(glass_dt$Na),
+  Mg = e1071::skewness(glass_dt$Mg),
+  Al = e1071::skewness(glass_dt$Al),
+  Si = e1071::skewness(glass_dt$Si),
+  K = e1071::skewness(glass_dt$K),
+  Ca = e1071::skewness(glass_dt$Ca)
+)
+RplotterPkg::create_table(
+  x = dt,
+  caption = "Skewness Measures for Glass Data"
+)
+```
+
+Variables *K* and *Ca* are showing skewness as evident in the histograms.
+
+### (c) Transformation of predictors
+
+<div class="task">Task: Pre-process to scale, center, and address skewness of the predictors.</div>
+1. Create the pre-process:
+
+```{r}
+Glass_preProc <- caret::preProcess(glass_dt[, .(K, Ca)], method = c("BoxCox", "center", "scale"))
+Glass_preProc
+```
+2. Apply the pre-process:
+
+```{r}
+glass_dt <- data.table::setDT(stats::predict(Glass_preProc, glass_dt))
+```
+
+<div class="task">Task: Re-plot the predictor histograms with the pre-processed values. </div>
+```{r}
+RplotterPkg::multi_histogram_plot(
+  df = glass_dt,
+  variables = c("K", "Ca"),
+  columns = 2,
+  row_height = 4.5,
+  title = "Distribution of K and Ca Pre-processed Glass Variables"
+)
+```
+
+<div class="task">Task: Create a box plot of the pre-processed predictor observations to identify possible outliers. </div>
+
+1. Scale *glass_dt* and create a "long" version of it:
+```{r}
+glass_scaled_dt <- data.table::as.data.table(scale(glass_dt))
+glass_scaled_dt <- glass_scaled_dt[, id := Glass$id]
+glass_long_dt <- data.table::melt(glass_scaled_dt, id.vars = "id", measure.vars = c("Na", "Mg", "Al", "Si", "K", "Ca"))
+head(glass_long_dt)
+```
+
+2. Create the box plot with outlier observations labeled with their *id* number:
+```{r, fig.width = 12, fig.height = 10}
+RplotterPkg::create_box_plot(
+  df = glass_long_dt,
+  aes_x = "variable",
+  aes_y = "value",
+  x_title = "Element",
+  y_title = "Refractive Index",
+  show_outliers = T,
+  label_outlier_var = "id",
+  label_outlier_color = "red"
+)
+```
+

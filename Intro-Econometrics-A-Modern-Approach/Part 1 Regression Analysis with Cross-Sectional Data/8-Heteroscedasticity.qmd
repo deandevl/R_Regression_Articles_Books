@@ -1,0 +1,212 @@
+---
+title: "8-Heteroscedasticity"
+author: "Rick Dean"
+format:
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: false
+    number-offset: 1
+    self-contained: true
+    smooth-scroll: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 8
+    fig-height: 8
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    minimal: false
+    css: ../../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "The following notes and scripts are based on the following sources: [Introductory Econometrics - A Modern Approach](https://www.amazon.com/Introductory-Econometrics-Modern-Approach-Standalone/dp/130527010X/ref=sr_1_2?dchild=1&keywords=Introductory+Econometrics%3A+A+Modern+Approach&qid=1597005903&s=books&sr=1-2) by Jeffrey M. Wooldridge is the main text for the statistical content. This text will be referenced as `(Wooldridge)`. The companion text [Using R for Introductory Econometrics](http://www.urfie.net/index.html) by Florian Heiss provides specific R scripts in support of the main text and the inspiration for my scripts, notes and graphics. I will reference this document as `(Heiss)`. The following is from **Part 1 - Regression Analysis with Cross-Sectional Data, Chapter 8 Heteroscedasticity** of `(Heiss)`."
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(data.table)
+library(magrittr)
+library(lmtest)
+library(car)
+library(wooldridge)
+library(RregressPkg)
+library(RplotterPkg)
+```
+
+# 8 Heteroscedasticity
+
+## 8.1 Heteroscedasticity-Robust inference
+`(Wooldridge)` presents a derivation of $Var(\hat{\beta_{1}})$ when heteroskedasticity is present (Equation 8.4, page 245) based on White(1980). `(Heiss)` suggests the function *car::hccm()* (*h*eteroscedasticity-*c*orrected *c*ovariance *m*atrices) that offers serveral versions of the White formula.
+
+Since the variance of $\hat{\beta_{i}}$ influences the standard errors, t statistics, and $p$ values, `(Wooldridge)` suggest the *lmtest::coeftest()* which accepts an argument for incorporating White's estimates of the variance-covariance matrix of the coefficients.
+
+For performing $F$-test, `(Wooldridge)` notes that *car::linearHypothesis()* function also accepts an argument for incorporating White's estimates.
+
+:::task
+Task: Compare the usual estimates of variance-covariance and associated tests with White's estimates when heteroscedasticity is suggested in the data.
+:::
+
+1.Set up the data:
+```{r}
+data("gpa3", package="wooldridge")
+gpa3_dt <- data.table::setDT(gpa3) %>%
+  .[spring == 1, .(cumgpa, sat, hsperc, tothrs, female, black, white)]
+```
+
+2.Define the linear model:
+```{r}
+formula_obj <- cumgpa ~ sat + hsperc + tothrs + female + black + white
+```
+
+3.Estimate the ols:
+```{r}
+gpa3_ols <- RregressPkg::ols_calc(df = gpa3_dt, formula_obj = formula_obj)
+```
+```{r}
+#| code-fold: true
+#| tbl-cap: cumgpa ~ sat + hsperc + tothrs + female + black + white
+
+RplotterPkg::create_table(
+  x = gpa3_ols$coef_df,
+  container_width_px = 400
+)
+```
+4.Estimate the variance-covariance and ols statistics with White's formulas:
+```{r}
+gpa3_lm <- lm(formula_obj, data = gpa3_dt)
+lmtest::coeftest(gpa3_lm, vcov=car::hccm)
+```
+
+5.Show the regular variance-covariance matrix:
+```{r}
+regular_var_cov <- gpa3_ols$var_cov
+regular_var_cov[lower.tri(regular_var_cov)] <- NA
+regular_var_cov
+```
+
+6.Show the White variance-covariance matrix:
+```{r}
+white_var_cov <- car::hccm(gpa3_lm)
+white_var_cov[lower.tri(white_var_cov)] <- NA
+white_var_cov
+```
+
+:::takeaway
+It appears that White's estimates return nearly the same variances and standard errors for the coefficients.
+:::
+
+:::task
+Task: Compute the $F$-tests with both the regular and White's alternative variance-covariance estimates using *car::linearHypothesis()*.
+:::
+
+1.Set the null hypothesis that *black* = *white* = 0
+```{r}
+null_hypoth <- c("black","white")
+```
+
+2.Compute the regular $F$-test:
+```{r}
+car::linearHypothesis(gpa3_lm, null_hypoth)
+```
+
+3.Compute the $F$-test with White's estimates for variance-covariance:
+```{r}
+car::linearHypothesis(gpa3_lm, null_hypoth, vcov=car::hccm)
+```
+
+## 8.2 Heteroscedasticity tests
+
+:::task
+Task: Investigate Heteroskedasticity in a Housing Price Equation.
+:::
+
+1.Set up the data:
+```{r}
+data("hprice1", package = "wooldridge")
+hprice1_dt <- data.table::as.data.table(hprice1) %>%
+    .[, .(price, lotsize, sqrft, bdrms)]
+```
+
+2.Define the model formula:
+```{r}
+formula_obj <- price ~ lotsize + sqrft + bdrms
+```
+
+3.Plot the model residuals:
+```{r}
+#| code-fold: true
+#| fig-cap: Housing Price Model Residuals
+
+RregressPkg::plot_residuals_check(
+  df = hprice1_dt,
+  formula_obj = formula_obj,
+  residual_label_threshold = 150.0,
+  leverage_label_threshold = 30.0
+)
+```
+
+4.Run Breusch-Pagan Test for Heteroskedasticity:
+```{r}
+BP_test_df <- RregressPkg::ols_BP_test_calc(
+  df = hprice1_dt,
+  formula_obj = formula_obj
+)
+```
+```{r}
+#| code-fold: true
+#| tbl-cap: BP Test Housing Price Residuals
+
+RplotterPkg::create_table(
+  x = BP_test_df,
+  container_width_px = 400
+)
+```
+
+:::takeaway
+Take Away: The $p-values$ indicate strong evidence against the null hypothesis of homoskedasticity of variance. The square of the estimated error term is a function of the predictor coefficients.
+:::
+
+### Logarithmic functional form of the formula object
+Chapter 6 of "Introductory Econometrics" suggest a reduction of heteroskedasticity by using the logarithmic functional form.
+
+1.Define the model formula:
+```{r}
+log_formula_obj <- log(price) ~ log(lotsize) + log(sqrft) + bdrms
+```
+
+2.Plot the model residuals:
+```{r}
+#| code-fold: true
+#| tbl-cap: Log Housing Price Model Residuals
+
+RregressPkg::plot_residuals_check(
+  df = hprice1_dt,
+  formula_obj = log_formula_obj,
+  residual_label_threshold = 0.4,
+  leverage_label_threshold = 0.15
+)
+```
+
+3.Run Breusch-Pagan Test for Heteroskedasticity:
+```{r}
+BP_test_df <- RregressPkg::ols_BP_test_calc(
+  df = hprice1_dt,
+  formula_obj = log_formula_obj
+)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: BP Test Log Housing Price Residuals
+
+RplotterPkg::create_table(
+  x = BP_test_df,
+  container_width_px = 400
+)
+```
+
+:::takeaway
+Take Away: Based on the $p-values$ we fail to reject the null hypothesis where the square of the estimated error term is not a function of the predictor coefficients.
+:::

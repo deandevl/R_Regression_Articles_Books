@@ -1,0 +1,744 @@
+---
+title: "2-Simple_Regression_Model"
+author: "Rick Dean"
+format:
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: false
+    number-offset: 1
+    self-contained: true
+    smooth-scroll: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 8
+    fig-height: 8
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    minimal: false
+    css: ../../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "The following notes and scripts are based on the following sources:
+[Introductory Econometrics - A Modern Approach](https://www.amazon.com/Introductory-Econometrics-Modern-Approach-Standalone/dp/130527010X/ref=sr_1_2?dchild=1&keywords=Introductory+Econometrics%3A+A+Modern+Approach&qid=1597005903&s=books&sr=1-2)  by Jeffrey M. Wooldridge is the main text for the statistical content. This text will be referenced as `(Wooldridge)`. The companion text [Using R for Introductory Econometrics](http://www.urfie.net/index.html) by Florian Heiss provides specific R scripts in support of the main text and the inspiration for my scripts, notes and graphics. I will reference this document as `(Heiss)`.  The following is from **Part 1 - Regression Analysis with Cross-Sectional Data, Chapter 2 The simple Regression Model** of `(Heiss)`."
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(data.table)
+library(wooldridge)
+library(ggplot2)
+library(magrittr)
+library(RregressPkg)
+library(RplotterPkg)
+```
+
+# 2 The Simple Regression Model
+
+## 2.1 Simple OLS Regression
+We want to estimate the population parameters $\hat{\beta_{0}}$ and $\hat{\beta_{1}}$ of the simple regression model:
+
+$$\hat{y_{i}} = \hat{\beta_{0}} + \hat{\beta_{1}}x_{i}$$
+
+where $\hat{y_{i}}$ is the **fitted value** for $y$ at observation $i$ (2.20 Wooldridge page 27).
+
+According to `(Wooldridge, Section 2.2, Equations 2.17, 2.19, page 26)` we can estimate the OLS regression line with:
+
+<center>$\hat{\beta_{0}} = \bar{y} - \hat{\beta_{1}}\bar{x}$ <span style="float:right;">[2.2 Heiss page 69]</span></center></br>
+
+<center>$\hat{\beta_{1}} = \frac{Cov(x,y)}{Var(x)}$ <span style="float:right;"> [2.3 Heiss page 69]</span></center>
+
+:::task
+Task: From the `wooldridge::ceosal1` data set involving "CEO Salary" (*salary*) and "Return on Equity" (*roe*) calculate the statistics for estimating the population parameters $\beta_{0}$ and $\beta_{1}$ for the *roe* variable to estimate *salary*.
+:::
+
+In the "pedestrian" approach to estimating $\hat{\beta_{0}}$ and $\hat{\beta_{1}}$ both Heiss (in Equations 2.2 and 2.3) and Wooldridge (in Equations 2.17 and 2.19) point out that we "just need to calculate the four statistics $\bar{y}$, $\bar{x}$, $Cov(x,y)$, and $Var(x)$".
+
+1. Read the data set:
+```{r}
+data(ceosal1, package = "wooldridge")
+ceosal1_dt <- data.table::as.data.table(ceosal1) %>%
+.[, .(roe, salary)]
+```
+2. From `(Wooldridge, Equation 2.19 page 26)` use the "pedestrian" approach to estimate $\hat{\beta}_1$ where we need the Cov(*roe*,*salary*) and the Var(*roe*):
+```{r}
+cov_roe_salary <- stats::cov(ceosal1_dt$roe, ceosal1_dt$salary)
+var_roe <- stats::var(ceosal1_dt$roe)
+b1_hat <- cov_roe_salary/var_roe
+```
+$Cov(salary,roe)$ = `r cov_roe_salary`
+
+$Var(roe)$ = `r var_roe`
+
+$\hat{\beta}_1 = \frac{Cov(salary,roe)}{Var(roe)}$ = `r b1_hat`
+
+3. From `(Wooldridge, Equation 2.17 page 26)` estimate $\hat{\beta}_0$ where we need the means for *roe* ($\bar{x}$) and *salary* ($\bar{y}$) and our just computed $\hat{\beta}_1$:
+```{r}
+b0_hat <- mean(ceosal1_dt$salary) - b1_hat * mean(ceosal1_dt$roe)
+```
+
+ $\hat{\beta}_0 = \bar{y} - \hat{\beta_{1}}\bar{x} =$ `r b0_hat`
+
+:::task
+Task: Use `stats::lm()` to repeat the above estimate of the coefficients $\hat{\beta_{0}}$ and $\hat{\beta_{1}}$, regressing *salary* on *roe* and plot the linear fit.
+:::
+
+1. Compute the coefficients via `stats::lm()`:
+```{r}
+roe_salary_lm <- stats::lm(salary ~ roe, data = ceosal1_dt)
+```
+Coefficients from `stats::lm()`: `r coef(roe_salary_lm)`
+
+2. Plot the linear fit:
+```{r}
+#| code-fold: true
+#| fig-width: 5
+#| fig-height: 5
+
+df <- data.frame(
+  roe = ceosal1_dt$roe,
+  salary = ceosal1_dt$salary,
+  fit = roe_salary_lm$fitted.values
+)
+RplotterPkg::create_scatter_plot(
+  df = df,
+  aes_x = "roe",
+  aes_y = "salary",
+  caption = "Salary Regressed on Return on Equity,wooldridge::ceosal1",
+  x_title = "Return on Equity",
+  y_title = "Salary",
+  rot_y_tic_label = TRUE
+) + geom_line(aes(y = fit), color = "red", linetype = "twodash")
+```
+
+Wooldridge brings up another form of estimating $\beta_{1}$:
+
+$$\hat{\beta}_{1} = \hat{\rho}_{xy} \cdot \left (\frac{\hat{\sigma}_{y}}{\hat{\sigma}_{x}}\right )$$
+where $\hat{\rho}_{xy}$ is the simple correlation(Pearson's) between $x_{i}$ and $y_{i}$ and $\hat{\sigma}_{y}$ and $\hat{\sigma}_{x}$ are the sample standard deviations.
+Wooldridge brings up an important point in regard to this estimate:
+
+> Recognition that $\beta_{i}$ is just a scaled version, $\rho_{xy}$, highlights an important limitation of simple regression when we do not have experimental data: In effect, simple regression is an analysis of correlation between two variables, and so one must be careful in inferring causality.
+
+Illustrating this second form (Pearson's r):
+```{r}
+cor_salary_roe <- stats::cor(ceosal1_dt$salary,ceosal1_dt$roe)
+salary_sd <- stats::sd(ceosal1_dt$salary)
+roe_sd <- stats::sd(ceosal1_dt$roe)
+
+b1_hat_salary_roe <- cor_salary_roe * salary_sd / roe_sd
+```
+
+$\hat{\beta_{1}}$  = `r b1_hat_salary_roe`
+
+:::takeaway
+Take Away: Both forms of estimating $\hat{\beta_{1}}$ are equal and is a scaled version of the correlation between $x_{i}$ and $y_{i}$.
+:::
+
+:::task
+Task: Find the relationship between wage and education `(Wooldridge, Example 2.4, page 30)` from the data set `wooldridge::wage1`.
+:::
+
+1. Read the data set:
+```{r}
+data(wage1, package = "wooldridge")
+wage1_dt <- data.table::setDT(wage1)
+wage1_dt <- wage1_dt[, .(wage, educ)]
+```
+2. Compute the OLS between *wage* and *educ*:
+```{r}
+wage_educ_lm <- stats::lm(wage ~ educ, data = wage1_dt)
+```
+The estimated $\hat{\beta}_0$ and $\hat{\beta}_1$ of the linear model are `r coef(wage_educ_lm)`
+
+`(Wooldridge, page 30)` notes that $\hat{\beta}_1$ implies that one year of education increases hourly wage by 54 cents an hour.
+
+3. Plot the line fit for *wage* regressed on *education*:
+
+```{r}
+#| code-fold: true
+#| fig-width: 5
+#| fig-height: 5
+
+
+df <- data.frame(
+  educ = wage1_dt$educ,
+  wage = wage1_dt$wage,
+  fit = wage_educ_lm$fitted.values
+)
+RplotterPkg::create_scatter_plot(
+  df = df,
+  aes_x = "educ",
+  aes_y = "wage",
+  caption = "Wage Regressed on Education,wooldridge::wage1",
+  x_title = "Education",
+  y_title = "Wage (%)",
+  rot_y_tic_label = TRUE,
+  x_limits = c(0,18),
+  x_major_breaks = seq(0,18,2)
+) + geom_line(aes(y = fit), color = "red", linetype = "twodash")
+```
+
+## 2.2 Coeffcients, Fitted Values, and Residuals
+
+The **residual** for observation $i$ is the difference between the actual $y_{i}$ and its fitted value:
+
+<center> $\hat{\mu_{i}} = y_{i} - \hat{y_{i}} = y_{i} - \hat{\beta_{0}} + \hat{\beta_{1}}x_{i}$ <span style="float:right;">[2.21 Wooldridge page 27] </span></center>
+
+or [Heiss] rearranges to give:
+
+<center>$y_{i} = \hat{\beta_{0}} + \hat{\beta_{1}}x + \hat{\mu_{i}}$ <span style="float:right;">[2.1 Heiss page 69]</span></center>
+
+We also have the population model for $y_{i}$:
+
+<center>$y_{i} = \beta_{0} + \beta_{1}x + \mu_{i}$ <span style="float:right"> [2.48 Wooldridge page 41]</span></center>
+where $\mu_{i}$ are known as the **errors** for observation $i$ where the model does not account for other predictors that may be important.
+
+`(Wooldridge, Section 2-5c, page 48)` shows the distinction between **residual** and **errors** by deriving:
+<center>$\hat{\mu_{i}} = \mu_{i} - (\hat{\beta_{0}} - \beta{_{0}}) - (\hat{\beta_{1}} - \beta_{1})x_{i}$<span style="float:right"> [2.59 Wooldridge page 49]</span></center>
+
+Thus **residuals** $\hat{\mu_{i}}$ is not the same as $\mu_{i}$. Wooldridge goes on to say that the expected difference between **residuals** and **errors** is zero and the estimate of $\mu_{i}$ is the OLS residual values $\hat{\mu_{i}}$
+
+The population error $\mu$ and its estimate also have a variance known as the **error variance** $\sigma^{2}$ where its square root is the  standard deviation of the error.  `(Wooldridge, page 45)` notes that a larger $\sigma$ means that the distribution of the unobservables affecting $y$ is more spread out.
+
+`(Wooldridge Theorem 2.2 page 47)` derives the variance of the OLS estimator $VAR(\hat{\beta_{1}})$ where $\sigma^2$ plays a central role. See section 2.6 below.
+
+`(Wooldridge, Section 2-3b, page 32)` presents three properties of OLS statistics. The three properties `(Heiss, page 76)`are:
+
+1. Sum and sample mean of the **residuals**: 
+
+<center>$\sum_{i=1}^n \hat{\mu_{i}} = 0 \Rightarrow \bar{\hat{\mu}}_{i} = 0$<span style="float:right">[2.7 Heiss page 76]</span></center>
+
+2. Sample covariance between the regressors and the OLS residuals:
+
+<center>$\sum_{i=1}^n x_{i}\hat{\mu}_{i} = 0$   $\Rightarrow$   $Cov(x_{i}, \hat{\mu}_{i}) = 0$<span style="float:right;">[2.8 Heiss page 76]</span></center><br>
+
+3. The mean is always on the line: 
+
+<center>$\bar{y} = \hat{\beta}_0 + \hat{\beta}_1 \cdot \bar{x}$<span style="float:right;">[2.9 Heiss page 76]</span></center><br>
+
+:::task
+Task: Take the above wage and education data set and confirm the three properties of OLS.
+:::
+
+1. Property 1 -- Mean of the residuals $\hat{\mu_{i}}$ = 0:
+```{r}
+mu_hat <- stats::resid(wage_educ_lm)
+mu_hat_mean <- mean(mu_hat)
+```
+Mean of $\hat{\mu_{i}}$ = `r mu_hat_mean`
+
+2. Property 2 -- The sample covariance between the predictors and the OLS residuals is zero. $Cov(x_{i},\hat{\mu}_{i}) = 0$
+```{r}
+cov_x_mu <- stats::cov(wage1_dt$educ, mu_hat)
+```
+Cov of $Cov(x_{i},\hat{\mu}_{i})$ = `r cov_x_mu`
+
+3. Property 3 -- The point $(\bar{x},\bar{y})$ is always on the OLS regression line. $\bar{y} = \hat{\beta_{0}} + \hat{\beta_{1}} * \bar{x}$
+```{r}
+y_mean <- mean(wage1_dt$wage)
+```
+
+The $\bar{y}$ = `r y_mean`
+
+```{r}
+lm_coef <- coef(wage_educ_lm)
+y_mean_lm <- lm_coef[1] + lm_coef[2] * mean(wage1_dt$educ)
+```
+
+$\hat{\beta_{0}} + \hat{\beta_{1}} * \bar{x}$ = `r y_mean_lm`
+
+## 2.3 Goodness of fit
+
+:::task
+Task: Using the above data of *salary* on *roe* compute the $R^2$ or coefficient of determination three different ways where `(Wooldridge, Equations 2.33,2.34,2.35 page 34)` defines:.
+:::
+
+<br><center>Total sum of the squares (SST) = $\sum_{i=1}^n(y_{i} - \bar{y})^2 = (n - 1) \cdot Var(y)$<span style="float:right;">[2.10 Heiss page 77]</span></center><br>
+
+<center>Explained sum of the squares (SSE) = $\sum_{i=1}^n(\hat{y}_{i} - \bar{y})^2 = (n - 1) \cdot Var(\hat{y})$<span style="float:right;">[2.11 Heiss page 77]</span></center><br>
+
+<center>Residual sum of the squares (SSR) = $\sum_{i=1}^n(\hat{\mu}_{i} - 0)^2 = (n - 1) \cdot Var(\hat{\mu})$<span style="float:right;">[2.12 Heiss page 77]</span></center><br>
+
+`(Wooldridge, Equation 2.38, page 35)` defines $$R^2 = \frac{SSE}{SST} = 1 - \frac{SSR}{SST}$$
+or
+$$R^2 = \frac{Var(\hat{y})}{Var(y)} = 1 - \frac{Var(\hat{\mu})}{Var(y)}$$
+
+1. Compute the SST, SSE, SSR:
+```{r}
+n <- nrow(ceosal1_dt)
+SST <- (n - 1) * stats::var(ceosal1_dt$salary)
+SSE <- (n - 1) * stats::var(fitted(roe_salary_lm))
+SSR <- (n - 1) * stats::var(resid(roe_salary_lm))
+```
+$SST = (n - 1) \cdot Var(y)$ = `r as.integer(SST)`
+
+$SSE = (n - 1) \cdot Var(\hat{y})$ = `r as.integer(SSE)`
+
+$SSR = (n - 1) \cdot Var(\hat{\mu})$ = `r as.integer(SSR)`
+
+2. Compute $R^2$ via $Var(\hat{y})/Var(y)$:
+```{r}
+R_2_1 <- SSE/SST
+```
+$Var(\hat{y})/Var(y)$ = `r R_2_1`
+
+3. Compute $R^2$ via $1 - Var(\hat{\mu})/Var(y)$
+```{r}
+R_2_2 <- 1 - (SSR/SST)
+```
+$1 - Var(\hat{\mu})/Var(y)$ = `r R_2_2`
+
+4. Compute $R^2$ using `stats::cor()` function:
+```{r}
+R_2_3 <- stats::cor(ceosal1_dt$salary, fitted(roe_salary_lm))^2
+```
+`stats::cor()` = `r R_2_3`
+
+The `stats::summary()` function can also show us the $R^2$ value as "Multiple R-squared":
+```{r}
+stats::summary.lm(roe_salary_lm)
+```
+
+## 2.4 Nonlinearities
+According to `(Wooldridge, page 37)` "...it is rather easy to incorporate many non-linearities into simple regression analysis by appropriately defining the dependent and independent variables" (i.e. a variable transformation).
+
+In taking the above example of *wage* regressed on *education* suppose we believe that each year of education increases wage by a constant **percentage**.  The percentage of wage change for one unit of education is the same at any starting value for years of education. A model that gives a constant percentage effect is:
+
+<center>$log(wage) = \beta_{0} + \beta_{1}educ + \mu$<span style="float:right;">[2.42 Wooldridge page 37]</span></center><br>
+
+:::task
+Task: Using equation [2.42] estimate the linear model of `log(wage)` (i.e. the natural log of *wage*) regressed on *educ*.
+:::
+```{r}
+log_wage_educ_lm <- stats::lm(log(wage) ~ educ, data = wage1_dt)
+b0 <- coef(log_wage_educ_lm)[[1]]
+b1 <- coef(log_wage_educ_lm)[[2]]
+```
+The regression of `log(wage)` on education is: $$\widehat{log(wage)} = 0.584 + 0.083 \cdot educ$$
+The model's estimate for $\hat{\beta}_{1}$ is 0.083 or multiplying by 100 we can say that $\widehat{log(wage)}$ increases by 8.3% for every additional year of education.
+
+:::task
+Task: Exponentiate equation [2.42] and plot the nonlinear nature of how *wage* increases for every additional year of education.
+:::
+
+1. By exponentiating [2.42], we can write an equation involving just *wage* and *educ*: $$\widehat{wage} = exp(\hat{\beta_{0}} + \hat{\beta_{1}}educ + \hat{\mu)}$$
+```{r}
+educ <- seq(0, 19, 1)
+log_wage <- b0 + b1 * educ
+wage <- exp(log_wage)
+wage_exp_dt <- data.table(
+  educ = educ,
+  wage = wage
+)
+head(wage_exp_dt)
+```
+2. Plot *wage* vs *educ*:
+```{r}
+#| code-fold: true
+#| fig-width: 5
+#| fig-height: 5
+
+RplotterPkg::create_scatter_plot(
+  df = wage_exp_dt,
+  aes_x = "educ",
+  aes_y = "wage",
+  caption = "Wage Regressed on Education, wage = exp(0.59 + 0.083*educ)",
+  x_title = "Education",
+  y_title = "Wage",
+  connect = TRUE,
+  x_limits = c(0,19),
+  x_major_breaks = seq(0,19,1),
+  y_limits = c(1,9),
+  y_major_breaks = seq(1,9,1)
+)
+```
+
+## 2.5 Regression through the Origin and Regression on a Constant
+
+`(Wooldridge, Section 2-6, page 50)` discusses models without an intercept.
+
+:::task
+Task: Using the above data of *salary* on *roe* compute the model $\hat{y} = \hat{\beta}_{1} \cdot x$ (i.e. regression is through the origin; in the OLS model use 0 for the intercept value).
+:::
+```{r}
+roe_salary_no_intercept_lm <- stats::lm(formula = salary ~ 0 + roe, data = ceosal1_dt)
+```
+
+ $\hat{\beta}_{1} =$ `r coef(roe_salary_no_intercept_lm)[[1]]`
+
+:::task
+Task: Using the above data of *salary* on *roe* compute the model $\hat{y} = \hat{\beta}_{0}$ (i.e. the regression is a constant).
+:::
+```{r}
+roe_salary_constant_lm <- stats::lm(formula = salary ~ 1, data = ceosal1_dt)
+```
+
+ $\hat{\beta}_{0} =$ `r coef(roe_salary_constant_lm)[[1]]`
+
+:::task
+Task: Plot all three regression models of *salary* on *roe*.
+:::
+
+```{r}
+#| code-fold: true
+#| fig-width: 7
+#| fig-height: 5
+
+fitted_dt <- data.table(
+  roe = ceosal1_dt$roe,
+  lm_fitted = roe_salary_lm$fitted.values,
+  lm_constant_fitted = roe_salary_constant_lm$fitted.values,
+  lm_no_intercept_fitted = roe_salary_no_intercept_lm$fitted.values
+)
+fitted_long_dt <- data.table::melt(
+  fitted_dt, 
+  id.vars = "roe", 
+  measure.vars = c("lm_fitted","lm_constant_fitted","lm_no_intercept_fitted"),
+  variable.name = "lm_type",
+  value.name = "fitted_value"
+)
+RplotterPkg::create_scatter_plot(
+  df = fitted_long_dt,
+  aes_x = "roe",
+  aes_y = "fitted_value",
+  aes_color = "lm_type",
+  caption = "Three linear models of 'Salary' regressed on 'Return on Equity'",
+  x_title = "Return on Equity",
+  y_title = "Salary",
+  rot_y_tic_label = TRUE,
+  x_limits = c(0,60),
+  x_major_breaks = seq(0,60,5),
+  y_limits = c(0,4500),
+  y_major_breaks = seq(0,4500,500),
+  show_pts = F,
+  connect = T
+) +
+  geom_point(data = ceosal1_dt, aes(roe,salary))
+```
+
+## 2.6 Expected Values, Variances, and Standard Errors
+`(Wooldridge, Section 2-5b, page 45)` presents Theorem 2.2 on the sampling variances of the OLS estimators $\hat{\beta}_{0}$ and $\hat{\beta}_{1}$.  `(Heiss, page 82)` gives the following equivalent formulas:
+
+<center>$se(\hat{\beta}_{0}) = \frac{1}{\sqrt{n-1}}\cdot\frac{\hat{\sigma}}{sd(x)}\cdot\sqrt{\bar{x^2}}$<span style="float:right;">[2.15 Heiss page 82]</span></center><br>
+
+<center>$se(\hat{\beta}_{1}) = \frac{1}{\sqrt{n-1}}\cdot\frac{\hat{\sigma}}{sd(x)}$<span style="float:right;">[2.16 Heiss page 82]</span></center><br>
+
+where $\hat{\sigma}^2 = \frac{n-1}{n-2}\cdot Var(\hat{\mu}_{i})$ is the variance of the error term $\mu$. $\hat{\sigma}$ = $\sqrt{\hat{\sigma}^2}$ is known as
+the **standard error of the regression** (SER) or **residual standard error**
+
+:::task
+Task: Using the data set `Wooldridge::meap93`, compute the standard errors of the OLS estimators using the above equations.
+:::
+
+Note that from the data set we are regressing math performance scores of schools on the share of students eligible for a federally funded lunch program.
+
+1. Read the data set:
+```{r}
+data("meap93", package = "wooldridge")
+meap93_dt <- data.table::setDT(meap93)
+meap93_dt <- meap93_dt[, .(math10, lnchprg)]
+```
+
+2. Estimate the OLS model:
+```{r}
+math_lunch_lm <- stats::lm(formula = math10 ~ lnchprg, data = meap93_dt)
+```
+
+3. Compute the **residual standard error** (SER):
+```{r}
+n = nrow(meap93_dt)
+SER <- sd(resid(math_lunch_lm)) * sqrt((n-1)/(n-2))
+```
+The *SER* = `r SER`
+
+4. Compute the standard errors for $\hat{\beta}_{0}$ and $\hat{\beta}_{1}$:
+```{r}
+beta_0_se <- (SER/sd(meap93_dt$lnchprg))/sqrt(n-1) * sqrt(mean(meap93_dt$lnchprg^2))
+beta_1_se <- (SER/sd(meap93_dt$lnchprg))/sqrt(n-1)
+```
+$se(\hat{\beta}_{0}) =$ `r beta_0_se`
+$se(\hat{\beta}_{1}) =$ `r beta_1_se`
+
+5. Compare the standard error values with those estimated from automatic calculations:
+```{r}
+summary(math_lunch_lm)
+```
+## 2.7 Monto Carlo Simulations
+
+### 2.7.1 One sample
+:::task
+Task: We are given population coefficients for $\beta_{0}$ = 1, $\beta_{1}$ = 0.5, and set the sd of the error term $\mu$ to $\sigma$ = 2.  If we draw a random sample ($n$ = 1000) of the independent variable $x$, then the population $y$ values can be computed from the population coefficients. If we estimate the coefficients via OLS, using $x$ and $y$ as input, how does the estimated $\hat{y}$ compare with the population $y$ values.
+:::
+
+1. Set the seed, set the population parameters, and draw a random sample of $x$ with mean = 4 and sd = 1:
+```{r}
+set.seed(1234567)
+n <-  1000
+b_0 <- 1
+b_1 <- 0.5
+x <- stats::rnorm(n, 4, 1)
+```
+
+2. Draw a random sample of the error term $\mu$ which has a mean of 0 and sd of 2:
+```{r}
+mu <- stats::rnorm(n, 0, 2)
+```
+
+3. Compute the population $y$ values:
+```{r}
+y <- b_0 + b_1 * x + mu
+```
+
+4. Estimate the coefficients via OLS:
+```{r}
+model_lm <- stats::lm(y ~ x)
+```
+The estimated coefficients via OLS are: `r coef(model_lm)`
+
+5. Plot both the population $y$ and the $\hat{y}$ estimated from OLS:
+```{r}
+#| code-fold: true
+#| fig-width: 5
+#| fig-height: 5
+
+dt <- data.table(
+  x = x,
+  y = y,
+  fit = model_lm$fitted.values
+)
+
+RplotterPkg::create_scatter_plot(
+  df = dt,
+  aes_x = "x",
+  aes_y = "y",
+  x_title = "X",
+  y_title = "Y",
+  caption = "Simulated sample and OLS Regression Line",
+  rot_y_tic_label = TRUE
+) + geom_line(aes(y = fit), color = "blue", linetype = "twodash")
+```
+
+:::task
+Task: Compute the standard errors of the above $\hat{\beta_{0}}$ and $\hat{\beta_{1}}$ OLS estimates.
+:::
+`(Wooldridge, Theorem 2.2, page 47)` states that the standard errors involve the mean values of $x^2$ ($\bar{x^2}$) and sum of the squares $\sum^n_{i=1}(x-\bar{x})^2$ where:
+$$Var(\beta_{0}) = \frac{\sigma^2 \bar{x^2}}{\sum^n_{i=1}(x-\bar{x})^2}$$
+$$Var(\beta_{1}) = \frac{\sigma^2}{\sum^n_{i=1}(x-\bar{x})^2}$$
+
+1. Compute mean($x^2$)
+```{r}
+x_2_mean <- mean(x^2)
+```
+The mean of $x^2$ = `r x_2_mean`
+
+2. Compute $\sum^n_{i=1}(x-\bar{x})^2$
+```{r}
+x_sum_2 <- sum((x - mean(x))^2)
+```
+$\sum^n_{i=1}(x-\bar{x})^2$ = `r x_sum_2`
+
+Standard error of $\hat{\beta_{0}}$ = `r sqrt(4*x_2_mean/x_sum_2)`
+
+Standard error of $\hat{\beta_{1}}$ = `r sqrt(4/x_sum_2)`
+
+### 2.7.2 Many samples
+
+:::task
+Task: Repeat the simulation in the above section by computing a random set of $x$ values along with 10000 random normal sets of the error term $\mu$
+:::
+
+1. Set the seed, set the population parameters, and draw a random sample of $x$ with mean = 4 and sd = 1:
+```{r}
+set.seed(1234567)
+n <-  1000
+simulations_n <- 10000
+b_0 <- 1
+b_1 <- 0.5
+sd_mu <- 2
+x <- stats::rnorm(n, 4, 1)
+# initialize vectors for storing OLS coefficient estimates
+b_0_ols <- numeric(simulations_n)
+b_1_ols <- numeric(simulations_n)
+```
+
+2. Repeat the simulation 10000 times and store the estimated OLS coefficients:
+```{r}
+for(j in 1:10000){
+  # draw a sample of y
+  mu <- stats::rnorm(n, mean = 0, sd = sd_mu)
+  y <- b_0 + b_1 * x + mu
+  
+  # estimate coefficients by OLS and store them in the vectors
+  b_ols <- stats::coefficients(lm(y~x))
+  b_0_ols[j] <- b_ols["(Intercept)"]
+  b_1_ols[j] <- b_ols["x"]
+}
+```
+
+3. Compute the means of the 10000 estimated OLS coefficients noting that $\beta_{0}$ = 1 and $\beta_{1}$ = 0.5:
+E($\hat{\beta}_{0}$) = `r mean(b_0_ols)`
+
+E($\hat{\beta}_{1}$) = `r mean(b_1_ols)`
+ 
+4. Compute the standard error of the sampled estimated OLS coefficients:
+```{r}
+sample_b_0_se = sqrt(var(b_0_ols))
+sample_b_1_se = sqrt(var(b_1_ols))
+```
+
+sampled_se($\beta_{0}$) = `r sample_b_0_se`
+
+sampled_se($\beta_{1}$) = `r sample_b_1_se`
+
+5. compare the sample coefficient standard errors to `(Heiss, equations 2.15, 2.16, page 82)`
+```{r}
+b_0_se = (1/sqrt(n-1))*(2/sd(x))*sqrt(mean(x^2))
+b_1_se = (1/sqrt(n-1))*(2/sd(x))
+```
+se($\beta_{0}$) = `r b_0_se`
+
+se($\beta_{1}$) = `r b_1_se`
+
+6. Plot the OLS fits:
+```{r}
+#| code-fold: true
+#| fig-width: 5
+#| fig-height: 5
+
+pop_df <- data.frame(
+  x = x,
+  y = b_0 + b_1 * x
+)
+ols_plot <- RplotterPkg::create_scatter_plot(
+ df = pop_df,
+ aes_x = "x",
+ aes_y = "y",
+ caption = "Simulated sample and OLS Regression(gray), population regression(red)",
+ x_title = "X",
+ y_title = "Y",
+ connect = T,
+ rot_y_tic_label = T,
+ show_pts = F,
+ line_color = "red"
+)
+for(i in 1:10){
+  ols_plot <- ols_plot + ggplot2::geom_abline(intercept = b_0_ols[i], slope = b_1_ols[i], color = "gray")
+}
+ols_plot
+```
+
+### 2.7.3 Violation of SLR.4
+`(Wooldridge, section 2-5, page 40)` presents set of assumptions for simple linear regression (SLR).  He outlines 5 assumptions (SLR.1 - SLR.5). `(Heiss, page 82)` list these assumptions and considers the violation of SLR.4 $E(\mu_{i}|x_{i}) = 0$ (zero conditional mean).
+
+:::task
+Task: Repeat the many sample Monte Carlo simulation in the above section 2.7.2 and compute a randomly selected population $\mu$ where the $\mu$'s mean is conditional on $x$. For example set $E(\mu_{i}|x_{i}) = \frac{x_{i}-4}{5}$
+:::
+
+1. Set the seed, set the population parameters, and draw a random sample of $x$ with mean = 4 and sd = 1:
+```{r}
+set.seed(1234567)
+n <-  1000
+simulations_n <- 10000
+b_0 <- 1
+b_1 <- 0.5
+sd_mu <- 2
+x <- stats::rnorm(n, mean = 4, sd = 1)
+# initialize vectors for storing OLS coefficient estimates
+b_0_ols <- numeric(simulations_n)
+b_1_ols <- numeric(simulations_n)
+```
+
+2. For $\mu$ set the vector of means $\frac{(x_{i}-4)}{5}$ and sd = *sd_mu* and repeat the simulation 10000 times and store the estimated OLS coefficients:
+```{r}
+for(j in 1:10000){
+  # draw a sample of y
+  mu <- stats::rnorm(n, mean = (x-4)/5, sd = sd_mu)
+  y <- b_0 + b_1 * x + mu
+  
+  # estimate coefficients by OLS and store them in the vectors
+  b_ols <- stats::coefficients(lm(y~x))
+  b_0_ols[j] <- b_ols["(Intercept)"]
+  b_1_ols[j] <- b_ols["x"]
+}
+```
+
+3. Compute the means of the 10000 sampled estimated OLS coefficients noting that $\beta_{0}$ = 1 and $\beta_{1}$ = 0.5:
+
+E($\hat{\beta}_{0}$) = `r mean(b_0_ols)`
+
+E($\hat{\beta}_{1}$) = `r mean(b_1_ols)`
+
+4. Compute the standard error of the sampled estimated OLS coefficients:
+```{r}
+sample_b_0_se = sqrt(var(b_0_ols))
+
+sample_b_1_se = sqrt(var(b_1_ols))
+```
+sampled_se($\hat{\beta}_{0}$) = `r sample_b_0_se`
+
+sampled_se($\hat{\beta}_{1}$) = `r sample_b_1_se`
+
+### 2.7.4 Violation of SLR.5
+SLR.5 addresses homoscedasticity of $\mu$ where $Var(\mu_{i}|x{i}) = \sigma^2$.
+
+:::task
+Task: As an example of the SLR.5 violation, repeat the many sample Monte Carlo simulation in the above section 2.7.2 and set $Var(\mu_{i}|x_{i}) = \frac{4}{e^{4.5}}\cdot e^{x_{i}}$
+:::
+
+1. Set the seed, set the population parameters, and draw a random sample of $x$ with mean = 4 and sd = 1:
+```{r}
+set.seed(1234567)
+n <-  1000
+simulations_n <- 10000
+b_0 <- 1
+b_1 <- 0.5
+x <- stats::rnorm(n, mean = 4, sd = 1)
+# initialize vectors for storing OLS coefficient estimates
+b_0_ols <- numeric(simulations_n)
+b_1_ols <- numeric(simulations_n)
+mu_var <- numeric(simulations_n)
+```
+
+2. For $\mu$ set the vector of means to 0 and $sd(\mu_{i})$ = $sqrt(\frac{4}{e^{4.5}}\cdot e^{x_{i}})$ and repeat the simulation 10000 times and store the estimated OLS coefficients:
+```{r}
+for(j in 1:10000){
+  # draw a sample of y
+  mu <- stats::rnorm(n, mean = 0, sd = sqrt(4/exp(4.5) * exp(x)))
+  mu_var[j] <- var(mu)
+  y <- b_0 + b_1 * x + mu
+  
+  # estimate coefficients by OLS and store them in the vectors
+  b_ols <- stats::coefficients(lm(y~x))
+  b_0_ols[j] <- b_ols["(Intercept)"]
+  b_1_ols[j] <- b_ols["x"]
+}
+```
+
+3. Compute the means of the 10000 estimated OLS coefficients noting that $\beta_{0}$ = 1 and $\beta_{1}$ = 0.5:
+
+E($\hat{\beta}_{0}$) = `r mean(b_0_ols)`
+
+E($\hat{\beta}_{1}$) = `r mean(b_1_ols)`
+
+4. Compute the standard error of the sampled estimated OLS coefficients:
+```{r}
+sample_b_0_se = sqrt(var(b_0_ols))
+
+sample_b_1_se = sqrt(var(b_1_ols))
+```
+sampled_se($\hat{\beta}_{0}$) = `r sample_b_0_se`
+
+sampled_se($\hat{\beta}_{1}$) = `r sample_b_1_se`
+
+5. compare the sample coefficient standard errors to `(Heiss, equations 2.15, 2.16, page 82)`
+```{r}
+b_0_se = (1/sqrt(n-1))*(2/sd(x))*sqrt(mean(x^2))
+b_1_se = (1/sqrt(n-1))*(2/sd(x))
+```
+se($\beta_{0}$) = `r b_0_se`
+
+se($\beta_{1}$) = `r b_1_se`
+
+According to `(Heiss, page 90)` the variances and thus the standard errors provided by the equations are incorrect.

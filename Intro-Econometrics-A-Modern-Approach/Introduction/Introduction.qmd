@@ -1,0 +1,809 @@
+---
+title: "Intro-Econometrics-A-Modern-Approach"
+author: "Rick Dean"
+format:
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: false
+    number-offset: 0
+    self-contained: true
+    smooth-scroll: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 5
+    fig-height: 5
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    minimal: false
+    css: ../../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "The following notes and scripts are based on the following sources:
+[Introductory Econometrics - A Modern Approach](https://www.amazon.com/Introductory-Econometrics-Modern-Approach-Standalone/dp/130527010X/ref=sr_1_2?dchild=1&keywords=Introductory+Econometrics%3A+A+Modern+Approach&qid=1597005903&s=books&sr=1-2)  by Jeffrey M. Wooldridge is the main text for the statistical content. This text will be referenced as `(Wooldridge)`. The companion text [Using R for Introductory Econometrics](http://www.urfie.net/index.html) by Florian Heiss provides specific R scripts in support of the main text and the inspiration for my scripts, notes and graphics. I will reference this document as `(Heiss)`.
+"
+---
+
+:::note
+I will follow the section numbers from `(Heiss)` with references to `(Wooldridge)`. Be aware that some sections will be skipped from either `(Wooldridge)` or `(Heiss)`.
+
+The data sets used in completing the exercises are contained in the [wooldridge](https://github.com/JustinMShea/wooldridge/tree/master/data) R package.  See the *datalist* file under the *data* directory for a list of all the data sets.
+:::
+
+```{r, warning = FALSE, message = FALSE}
+library(data.table)
+library(magrittr)
+library(ggplot2)
+library(RplotterPkg)
+library(wooldridge)
+```
+
+# 1 Introduction
+
+## 1.5 Descriptive Statistics
+
+### 1.5.1 Discrete Distributions
+:::task
+Task: Prepare the *affairs* data set to demonstrate tables of counts and proportions in R.
+:::
+
+1. Read in the *affairs* data set and define it as a *data.table*:
+```{r}
+data(affairs, package = "wooldridge")
+affairs_dt <- data.table::as.data.table(affairs)
+str(affairs_dt)
+```
+
+2. Create two new variables in *affairs*:
+```{r}
+affairs_dt[, c("has_kids","marriage") := .(
+  factor(kids, labels = c("no","yes")), 
+  factor(ratemarr, labels = c("very unhappy", "unhappy","average","happy","very happy"))
+)]
+```
+:::task
+Task: Working with `base::table()` to compute frequencies, proportions, contingency tables.
+:::
+
+1. Display counts of *has_kids* variable:
+```{r}
+table(affairs_dt$has_kids)
+```
+
+2.Display proportions of *marriage* variable:
+```{r}
+prop.table(table(affairs_dt$marriage))
+```
+
+3. Contingency table between *marriage* and *has_kids*:
+```{r}
+contingency_table <- table(affairs_dt$marriage, affairs_dt$has_kids, dnn = c("marriage", "has_kids"))
+contingency_table
+```
+
+4. Contingency table showing proportions of *has_kids* within levels of *marriage* (within a row, margin = 1):
+```{r}
+prop.table(contingency_table, margin = 1)
+```
+
+5. Contingency table showing proportions of *marriage* Within levels of *has_kids* proportions (within a column, margin = 2)
+```{r}
+prop.table(contingency_table, margin = 2)
+```
+
+### 1.5.2 Continuous Distributions: Histograms and Density
+:::task
+Task: Using the *ceosal1* data set create a histogram of *ROE* variable (return on equity in percent).
+:::
+
+1. Set up the data set and the *ROE* variable:
+```{r}
+data(ceosal1, package = "wooldridge")
+ROE_dt <- data.table(
+  ROE = ceosal1$roe
+)
+data.table::setorder(ROE_dt, -ROE)
+str(ROE_dt)
+```
+
+2. Plot the histogram:
+```{r}
+#| code-fold: true
+#| fig-width: 5
+#| fig-height: 5
+
+RplotterPkg::create_histogram_plot(
+  df = ROE_dt,
+  aes_x = "ROE",
+  caption = "Histogram of ROE, % Return on Equity",
+  x_title = "ROE(percent)",
+  bar_fill = "blue",
+  bar_alpha = 0.6,
+  x_minor_breaks = NULL,
+  rot_y_tic_label = TRUE,
+  bin_breaks = seq(0,60,5),
+  x_major_breaks = seq(0,60,5)
+)
+```
+3. Plot the kernel density estimate of *ROE*:
+```{r}
+#| code-fold: true
+#| fig-width: 5
+#| fig-height: 5
+
+RplotterPkg::create_density_plot(
+  df = ROE_dt,
+  bw = 1.754,
+  aes_x = "ROE",
+  caption = "Density of ROE, N = 209  Bandwidth = 1.754",
+  x_title = "ROE(percent)",
+  rot_y_tic_label = TRUE,
+  plot_obs = TRUE,
+  x_limits = c(0,60),
+  x_major_breaks = seq(0,60,5),
+  x_minor_breaks = NULL,
+  density_fill = "blue",
+  density_alpha = 0.6
+)
+```
+
+### 1.5.3 Empirical Cumulative Distribution Function (ECDF)
+:::task
+Task: Plot the ECDF of the *ROE* variable.
+:::
+
+ 1. From `(Heiss, section 1.6.3, page 44)` we can compute the cumulative density function (cdf) $P(X < x)$ for all values of $x$ by using the `stats::pnorm()` function where we assume the *ROE* variable is from a normal distribution. To plot using the *pnorm()* function we will need all the *ROE* $x$ values along with *ROE*'s mean and standard deviation:
+```{r}
+ROE_ecdf <- stats::pnorm(q = ROE_dt$ROE, mean = mean(ROE_dt$ROE), sd = stats::sd(ROE_dt$ROE))
+ROE_ecdf_dt <- data.table(
+  ROE = ROE_dt$ROE,
+  ECDF = ROE_ecdf
+)
+ROE_ecdf_dt <- ROE_ecdf_dt[order(ROE)]
+str((ROE_ecdf_dt))
+```
+
+ 2. Plot the ECDF of *ROE*:
+```{r}
+#| code-fold: true
+#| fig-width: 5
+#| fig-height: 5
+
+RplotterPkg::create_scatter_plot(
+  df = ROE_ecdf_dt,
+  aes_x = "ROE",
+  aes_y = "ECDF",
+  caption = "Empirical Cumulative Distribution Function of ROE(percent)",
+  x_title = "ROE",
+  connect = TRUE,
+  pts_size = 1.5,
+  x_limits = c(0, 60),
+  x_major_breaks = seq(0, 60, 10),
+  line_color = "purple"
+)
+```
+
+### 1.5.4 Fundamental Statistics
+:::task
+Task: Using `base::mean(), base::median(), stats::sd(), stats::cor()` functions to compute summary statistics for the *salary* variable from the *ceosal1* data set.
+:::
+
+1. Show the summary statistics:
+```{r}
+salary_stats_dt <- data.table(
+  Mean = mean(ceosal1$salary),
+  Median = median(ceosal1$salary),
+  SD = stats::sd(ceosal1$salary),
+  Salary_ROE_Cor = stats::cor(ceosal1$salary, ceosal1$roe)
+)
+```
+```{r}
+#| code-fold: true
+#| tbl-cap: "Summary Stats for Salary"
+
+RplotterPkg::create_table(
+  x = salary_stats_dt,
+  container_width_px = 300
+)
+```
+
+## 1.6 Probability Distributions
+### 1.6.1 Discrete Distributions
+:::task
+Task: Compute the Binomial distribution for selecting X white balls (with replacement) from an urn of 10 balls where 20% are white.
+:::
+
+1. Use the `stats::dbinom()` function:
+```{r}
+prob_2_white <- stats::dbinom(x = 2, size = 10, prob = 0.2)
+```
+The probability = `r prob_2_white`
+
+2. Use the pedestrian approach:
+  
+  $$f(x) = P(X = x) = \binom{n}{x} * p^x * (1 - p)^{n-x} = \binom{10}{x} * 0.2^x * 0.8^{10-x}$$
+  
+```{r}
+ped_2_white <- choose(n = 10, k = 2) * 0.2^2 * 0.8^8
+```
+The probability (pedestrian) = `r ped_2_white`
+
+:::task
+Task: Plot all the probabilities for the binomial for the values of x from 0 to 10 using the `stats::dbinom()` function.
+:::
+
+:::note
+The *dbinom* function returns the value of the probability mass function (pmf) given *x* the number of selections, *size* total number to chose from, and *prob* the probability for the selection.
+:::
+
+1. Compute the probabilities:
+```{r}
+white_ball_density <- stats::dbinom(x = seq(0,10), size = 10, prob = 0.2)
+```
+ 
+2. Create a data table of the data:
+```{r}
+binomial_dt <- data.table(
+  x = seq(0,10,1),
+  y = white_ball_density
+)
+```
+ 
+3. Plot the data:
+```{r}
+#| code-fold: true
+#| fig-width: 5
+#| fig-height: 5
+
+RplotterPkg::create_stick_plot(
+  df = binomial_dt,
+  aes_x = "x",
+  aes_y = "y",
+  caption = "Binomial Probabilties, Picking x white balls out of 10 where prob_white = 0.2",
+  x_title = "Number of White Balls Picked",
+  y_title = "Density",
+  x_limits = c(0,10),
+  x_major_breaks = seq(0,10,1),
+  x_minor_breaks = NULL,
+  line_size = 2.0,
+  line_color = "blue"
+)
+```
+
+### 1.6.2 Continuous Distributions
+:::task
+Task: Plot the probability density function (pdf) values of the standard normal distribution using standard scores.
+:::
+
+We can create a data set with a sequence of standard scores between $\pm4$ at a certain interval. The function `stats::dnorm()` can then take these scores and compute their respective pdf's.  
+
+1. Create a data set with standard scores between $\pm4$ and their respective pdf's:
+```{r}
+z_scores <- seq(-4, 4, .01)
+normal_pdf_dt <- data.table(
+  z_scores = z_scores,
+  pdf_vals = stats::dnorm(z_scores)
+)
+```
+2. Plot the pdf values for a standard normal distribution:
+```{r}
+#| code-fold: true
+#| fig-width: 5
+#| fig-height: 5
+
+RplotterPkg::create_scatter_plot(
+  df = normal_pdf_dt,
+  aes_x = "z_scores",
+  aes_y = "pdf_vals",
+  caption = "Standard Normal Probability Density, pdf = stats::dnorm(z_scores)",
+  y_title = "pdf",
+  connect = TRUE,
+  show_pts = FALSE,
+  line_color = "blue"
+) 
+```
+:::task
+Task: Plot the probability density function (pdf) values of the standard normal distribution using equally spaced probability values (quantiles) between (0,1).
+:::
+
+We can create a simple sequence of equally spaced probability numbers between (0,1). The function `stats::qnorm()` can take these numbers and return their respective standard normal distribution scores.  We can then compute the pdf from these scores and plot the pdf.
+
+1. Create a data set with equally spaced probability values between (0,1) and their respective standard values using the *qnorm* function: 
+```{r}
+quantiles <- seq(0.0001, 0.9999, 0.0001)
+scores_dt <- data.table(
+  z_scores = qnorm(quantiles)
+)
+```
+
+2. Compute the pdf of the z scores and plot the pdf using `RplotterPkg:create_density_plot()`:
+
+:::note
+The `RplotterPkg:create_density_plot()` function takes scores as input and uses the `stats::density(scores)` to compute and plot the pdf.
+:::
+
+```{r}
+#| code-fold: true
+#| fig-width: 5
+#| fig-height: 5
+
+RplotterPkg::create_density_plot(
+  df = scores_dt,
+  aes_x = "z_scores",
+  caption = "Standard Normal Probability Density, pdf = stats::density(z_scores)",
+  y_title = "pdf",
+  x_limits = c(-4,4),
+  x_major_breaks = seq(-4,4,2),
+  rot_y_tic_label = TRUE,
+  density_color = "blue"
+)
+```
+
+### 1.6.3 Cumulative Distribution Function (cdf)
+As presented above in Section 1.5.3 the `stats::pnorm(z)` function computes the cumulative density values given their scores, mean, and standard deviation. Formally `(Wooldridge, Section B-5b, page 666)` symbolizes the standard cdf as $\Phi(z) = P(Z < z)$. He further defines the probability between two scores as $P(z_{a} \le Z \le z_{b}) = \Phi(z_{b}) - \Phi(z_{a})$.  Computationally $P(z_{a} \le Z \le z_{b})$ = pnorm($z_{b}$) - pnorm($z_{a}$).
+
+:::task
+Task: From `(Wooldridge, Example B.6, page 668)` given $X \backsim  Normal(4,9)$  verify that $P(z_{2} < Z < z_{6}) = 0.498$ where $z_{X}$ are the standard score for the scores X = 2 and X = 6.
+:::
+
+1. Compute the standard scores $z_{X}$ for scores X = 2 and X = 6 that have a mean of 4 and standard deviation of `sqrt(9)`:
+```{r}
+z_2 <-  (2 - 4)/sqrt(9)
+z_6 <-  (6 - 4)/sqrt(9)
+```
+
+2. Using `stats::pnorm(z)` find the cdf's for scores 2 and 6:
+```{r}
+cdf_2 <-  stats::pnorm(z_2)
+cdf_6 <-  stats::pnorm(z_6)
+```
+:::note
+Mean and SD for `stats::pnorm()` are assumed to be 0 and 1 respectively when not specified.
+:::
+ 
+3. Take the difference between the cdfs' to compute $P(z_{2} < Z < z_{6})$:
+```{r}
+prob_2_6 <-  cdf_6 - cdf_2
+```
+The value for $P(z_{2} < Z < z_{6})$ is `r prob_2_6`
+
+`(Wooldridge, Example B.6, page 668)` also illustrates finding the probability of the absolute value of a score greater than some constant. `(Wooldridge, Equations B.36, B.37, B.38, B.39, page 667)` presents 4 important formulas including the absolute value formula:
+ 
+$$ P(Z>z_{c}) = 1 - \Phi(z_{c}) \\ P(Z < -z_{c}) = P(Z > z_{c}) \\ P(z_{a} \le Z \le z_{b}) = \Phi(z_{b}) - \Phi(z_{a}) \\ P(|Z| > z_{c}) = P(Z > z_{c}) + P(Z < -z_{c})$$
+
+:::task
+Task: Returning to`(Wooldridge, Example B.6, page 668)`, find $P(|Z| > z_{2})$ given that the standard score Z is derived from scores X where $X \backsim  Normal(4,9)$.
+:::
+
+1. From the last formula above we have:
+$$P(|Z| > z_{2}) = P(Z > z_{2}) + P(Z < -z_{2}) \\ = 1 - \Phi(z_{2}) + P(Z < -z_{2}) \\ = 1 - \Phi(z_{2}) + \Phi(-z_{2})$$
+
+2. Compute the standand score for X = 2 ($z_{2}$) and X = -2 ($-z_{2}$)
+```{r}
+z_2 <- (2 - 4)/sqrt(9)
+z_neg_2 <- (-2 - 4)/sqrt(9)
+```
+
+3. Compute the cdfs' for $\Phi(z_{2})$ and $\Phi(-z_{2})$
+```{r}
+cdf_2 <- stats::pnorm(z_2)
+cdf_neg_2 <- stats::pnorm(z_neg_2)
+```
+
+4. Compute $P(|Z| > z_{2}) = 1 - \Phi(z_{2}) + \Phi(-z_{2})$:
+```{r}
+prob_abs_2 <- 1 - cdf_2 + cdf_neg_2
+```
+ 
+$P(|Z| > z_{2})$ = `r prob_abs_2`
+
+:::task
+Task: Plot the cdf of the standard normal distribution
+:::
+
+1. Create a data set with standard scores between $\pm4$ and their respective cdf's:
+```{r}
+z_scores <- seq(-4, 4, .01)
+normal_cdf_dt <- data.table(
+  z_scores = z_scores,
+  cdf_vals = stats::pnorm(z_scores)
+)
+``` 
+
+2. Plot the *z_scores* vs *cdf_vals*:
+```{r}
+#| code-fold: true
+#| fig-width: 5
+#| fig-height: 5
+
+RplotterPkg::create_scatter_plot(
+  df = normal_cdf_dt,
+  aes_x = "z_scores",
+  aes_y = "cdf_vals",
+  caption = "CDF for Standard Normal Distribution",
+  connect = TRUE,
+  show_pts = FALSE,
+  line_color = "blue",
+  rot_y_tic_label = TRUE
+)
+```
+
+### 1.6.4 Random Draws from Probability Distributions
+:::task
+Task: Perform a random sample from a standard normal distribution and plot the density using `stats::rnorm()` function and a seed value.
+:::
+```{r}
+#| code-fold: true
+#| fig-width: 5
+#| fig-height: 5
+
+set.seed(42)
+normal_dt <- data.table(x = stats::rnorm(1000))
+RplotterPkg::create_density_plot(
+  df = normal_dt,
+  aes_x = "x",
+  caption = "Sampled Standard Normal Data using stats::rnorm(), N = 1000",
+  density_fill = "purple",
+  density_color = "gold",
+  density_size = 1.4,
+  x_major_breaks = seq(-3,3, 0.5)
+)
+```
+
+## 1.7 Confidence Intervals and Statistical Inference
+
+### 1.7.1 Confidence Intervals
+The following are notes from `(Wooldridge, Appendix C.5 The Nature of Interval Estimation, page 687)`
+
+Suppose we are looking at a (non)normal population with an unknown mean $\mu$ and an unknown standard deviation $\sigma$.  If we take a large number of random samples of size $n$ from this population, then the sample means $\bar{Y_{i}}$ will have a normal distribution with mean $\mu$ and standard deviation of $\sigma/\sqrt{n}$. If we standarize the $\bar{Y_{i}}$'s by subtracting them from $\mu$ and dividing by the standard deviation, then we have the following for a specific sample $\bar{Y_{i}}$ from this normal distribution: 
+
+<center>$P(-q \lt (\bar{Y_{i}} - \mu)/(\sigma/\sqrt{n}) \lt q) = 0.95$<span style="float:right;">[1]</span></center>
+where for a 95% confidence interval (CI), *q* corresponds to the 97.5th quantile of a normal distribution which is approximately 1.96.
+
+Equation **[1]** is identically:
+<center>$P(\bar{Y}_{i} - q(\sigma/\sqrt{n}) \lt \mu \lt \bar{Y}_{i} + q(\sigma/\sqrt{n})) = 0.95$<span style="float:right;">[2]</span></center>
+
+Equation **[2]** tells us that for 95% of all random samples, the above constructed CI will contain $\mu$ the population mean.
+
+It is important to stress that a 95% CI does NOT mean that for a given realized interval there is a 95% probability that the population mean lies within the interval (i.e. a 95% probability that the interval covers the population mean). Rather the CI can be expressed in terms of samples (or repeated samples):
+
+"Were this procedure to be repeated on numerous samples, the fraction of calculated confidence intervals (which would differ for each sample) that encompass the true population mean would tend toward 95%." (Cox and Hinkley) *Theoretical Statistics*
+
+In attempting to compute the CI note that it involves the unknown $\sigma$, the population standard deviation.  We cannot substitute a sample $\hat{\sigma_{i}}$'s because then the estimated standard deviation will depend on a specific sample.
+
+"Rather than using the standard normal distribution, we must rely on the $t$-distribution."`(Wooldridge,Section C-5b, page 689)`
+The $t$-distribution arises from the fact that:
+$$(\bar{Y_{i}} - \mu)/(\hat{\sigma_{i}}/\sqrt{n}) \backsim t_{n-1}$$
+where $\bar{Y_{i}}$ is a sample average and $\hat{\sigma_{i}}$ is a sample standard deviation.
+
+In `(Wooldridge, Appendix C, Section c-5b, equations C.24 and C.25, page 690)` the CI for the unknown population mean $\mu$ is defined as:
+
+<center>$[ \bar{y} - c_{\alpha/2} * se(\bar{y}),  \bar{y} + c_{\alpha/2} * se(\bar{y})]$<span style="float:right;">[3]</span></center>
+
+where $\bar{y}$ is the sample mean, $c_{\alpha/2}$ is the $1-\alpha/2$ quantile of the $t_{n-1}$ distribution, and $se(\bar{y})$ is the sample estimate of the population mean's standard error (i.e. $\hat{sd}/\sqrt{n}$ the sample standard deviation divided by the square root of the sample $n$ of $\hat{y}$). 
+
+To get the 95% CI ($\alpha$ = 5%), then the $t$-distribution value at quantile 0.975 (i.e. $1-\alpha/2$ or 1 - .05/2) gives us the number of standard deviations from below and above the mean to account for 95% of the area or probability.
+
+As an example `(Wooldridge, Appendix C, Example C.2 page 690)` looks at the effect of job training grants on worker productivity.  The goal is that "We are interested in constructing a confidence interval for the change in the scrap rate from 1987 to 1988 for the population of all manufacturing firms that could have received grants".
+
+`(Heiss, Section 1.7.1, page 48)` outlines "Ingredients to CI formula" using basic R functions `mean(), sd(), and qt()` for computing the CI.
+
+:::task
+Task: Compute manually the 95% CI for the population mean of the *change* variable. See `(Wooldridge, Appendix C, Table C.3, page 691)` for the the *change* data from 1987 to 1988. A negative value for *change* would presumable indicate that the statistic comes from a normal distribution and the training had some positive effect.
+:::
+
+1. Create the data set:
+```{r}
+change <- c(-7,0,-1,.05,.29,.2,-.26,-1,-7.51,-.5,-.47,-.5,.16,1.67,-4,-2,1,-.08,-2,-.14)
+```
+
+2. Compute the sample *change* mean $\bar{y}$:
+```{r}
+change_mean <- mean(change)
+```
+The mean is `r change_mean`
+
+3. Compute the standard error of the mean $se(\bar{y})$ or $\hat{sd}/\sqrt{n}$:
+```{r}
+n_change <- length(change)
+se <- stats::sd(change)/sqrt(n_change)
+```
+The standard error is `r se`
+
+4. Compute the 97.5 percentile $c_{\alpha/2}$ of the $t$-distribution:
+```{r}
+t_975 <- stats::qt(p = 0.975, df = n_change - 1)
+```
+The $t$-distribution value is `r t_975`
+
+5. Using equation [3] above compute the CI for the *change* mean:
+```{r}
+ci_change_mean <- c(change_mean - t_975 * se, change_mean + t_975 * se)
+```
+The CI for the *change* mean is `r ci_change_mean`
+
+As a conclusion from `(Wooldridge, Appendix C, Example C.2, page 690)`: "The value of zero is excluded from this interval, so we conclude that, with 95% confidence, the average *change* in the population is not zero."
+
+:::note
+The t-distribution approaches the standard normal distribution as the degrees of freedom $n - 1$ gets large.  See `(Wooldridge, Appendix C, Section c.5d, page 692)`
+:::
+
+A second CI example is presented at `(Wooldridge, Appendix C, Example c.3, page 692)` involving race discrimination in hiring.  241 jobs were offered for pairs of black and white applicants.  Across the jobs, the data contain a *black* and *white* variables having values 1 or 0 if the applicant was accepted for the job.
+
+:::task
+Task:Compute manually the CI for the population mean difference between the *black* and *white* variables in hiring using the normal distribution instead of the $t$-distribution.
+:::
+
+1. Reference the data set and compute the mean difference between the *black* and *white* variables:
+```{r}
+data(audit, package = "wooldridge")
+black <- audit$b
+white <- audit$w
+black_mean <- mean(black)
+white_mean <- mean(white)
+mean_diff <- black_mean - white_mean
+```
+The mean difference is `r mean_diff`
+
+2. Compute the standard error of the mean:
+```{r}
+black_white_diff <- black - white
+n_diff <- length(black_white_diff)
+sd_diff <- sqrt(sum((black_white_diff - mean_diff)^2)/(n_diff - 1))
+se_mean_diff <- sd_diff/sqrt(n_diff)
+```
+The standard error is `r se_mean_diff`
+
+3. Compute the 97.5 and 99.5 percentiles of the standard normal distribution:
+```{r}
+normal_975 <- stats::qnorm(p = 0.975)
+normal_995 <- stats::qnorm(p = 0.995)
+```
+The 97.5 and 99.5 percentiles of the standard normal distribution are `r normal_975` and `r normal_995` respectively
+
+4. Using equation [3] above compute the CI for the mean difference at the 97.5 and 99.5 percentile levels:
+```{r}
+CI_95_diff <- mean_diff + normal_975 * c(-se_mean_diff, se_mean_diff)
+CI_99_diff <- mean_diff + normal_995 * c(-se_mean_diff, se_mean_diff)
+```
+
+Confidence intervals for 95 percentile: `r CI_95_diff`
+
+Confidence intervals for 99 percentile: `r CI_99_diff`
+
+Since neither CI's contain zero, we are confident that the population difference is not zero.
+
+### 1.7.2 $t$ Tests
+Hypothesis tests are covered in `(Wooldridge, Appendix C, Section C.6, page 693)`
+The null hypothesis can be stated as $H_{0}: \mu = \mu_{0}$ where $\mu_{0}$ is a value that we specify.  In the majority of cases $\mu_{0} = 0$ where we standardize $y_{i}$ values and test for a mean of zero.  Under the null hypothesis the random variable:
+$$t = (\bar{y} - \mu_{0})/se(\bar{y}) \\ = \sqrt{n}(\bar{y} - \mu_{0})/\hat{sd}$$
+has a $t_{n-1}$ distribution.
+
+:::note
+We always assume that the null hypothesis $H_{0}$ is true. Our goal is to test if we can reject $H_{0}$.  For the same set of data, there are usually many hypotheses that cannot be rejected but only one can be true. For this reason, we always say "fail to reject $H_{0}$" rather than "accept $H_{0}$".
+:::
+ 
+ The rejection rule we choose depends on the nature of the alternative hypothesis. The three alternatives of interest are 
+ $$H_{1}:\mu \neq \mu_{0}$$
+ $$H_{1}:\mu \gt \mu_{0} $$
+ $$H_{1}:\mu \lt \mu_{0}$$
+ The first $H_{1}$ is a two-sided alternative; the second and third are one-sided alternatives.
+ 
+:::task
+Task: Using the job training data `(Wooldridge, Example C.2, page 690)`perform a one-sided test of the null hypothesis $H_{0}: \mu = 0$ against the one sided test $H_{1}: \mu < 0$
+:::
+
+`(Wooldridge, Appendix C, Example C.6, page 700)` sets up the hypothesis for the effects of job training grants.  Under the null hypothesis, the job training grants have no effect on average scrap rates.  The alternative states that there is an effect.
+
+1. Set up the data set:
+```{r}
+scrap_rates_change <- c(-7,0,-1,.05,.29,.2,-.26,-1,-7.51,-.5,-.47,-.5,.16,1.67,-4,-2,1,-.08,-2,-.14)
+```
+
+2. Compute the sample n, mean, standard deviation, and $t$ value:
+```{r}
+scrap_n <- length(scrap_rates_change)
+scrap_mean <- mean(scrap_rates_change)
+scrap_sd <- sd(scrap_rates_change)
+scrap_t <- sqrt(scrap_n) * (scrap_mean - 0)/scrap_sd
+```
+The $t$ value is `r scrap_t`
+
+3. Compute the critical values for t-distribution with scrap_n-1 = 19 d.f.
+```{r}
+alpha_one_tailed <- c(0.1, 0.05, 0.025, 0.01, 0.005, 0.001)
+t_critical <- -stats::qt(p = 1 - alpha_one_tailed, df = scrap_n-1)
+critical_table <- data.table(
+  alpha_one_tailed = alpha_one_tailed,
+  CV = t_critical
+)
+critical_table[]
+```
+ It appears that the $t$ value is below the 5% critical value of -1.73 but above the 1% critical value of -2.54.
+ `(Wooldridge, Appendix C, Example C.6, page 700)` concludes that we can reject $H_{0}: \mu = 0$ that the training grants had no effect at the 5% level.
+ 
+:::task
+Task: Using the *audit* race discrimination data set perform a one-sided test of the null hypothesis $H_{0}: \mu = 0$ against the one sided test $H_{1}: \mu < 0$ where $\mu = \theta_{B} - \theta_{w}$ is the difference in probabilities that blacks and whites receive offers.
+:::
+ 
+1. Compute the mean difference and standard error of the mean:
+```{r}
+data(audit, package = "wooldridge")
+black <- audit$b
+white <- audit$w
+black_mean <- mean(black)
+white_mean <- mean(white)
+mean_diff <- black_mean - white_mean
+
+black_white_diff <- black - white
+n_diff <- length(black_white_diff)
+sd_diff <- sqrt(sum((black_white_diff - mean_diff)^2)/(n_diff - 1))
+se_mean_diff <- sd_diff/sqrt(n_diff)
+```
+
+The mean difference is `r mean_diff`
+
+The standard error is `r se_mean_diff`
+
+2. Compute the $t$ value where $t = (\hat{y} - \mu)/se(\hat{y})$
+```{r}
+t <- (mean_diff - 0)/se_mean_diff
+```
+t = `r t`
+
+3. Compute the critical values for t-distribution with n-1 = 240 d.f.
+```{r}
+alpha_one_tailed <- c(0.1, 0.05, 0.025, 0.01, 0.005, 0.001)
+t_critical <- -stats::qt(p = 1 - alpha_one_tailed, df = n_diff-1)
+critical_table <- data.table(
+  alpha_one_tailed = alpha_one_tailed,
+  CV = t_critical
+)
+critical_table[]
+```
+
+4. The t value is much smaller than any of the critical values so we reject the null hypothesis $H_{0}: \mu = 0$. `(Wooldridge, Appendix C, Section C.6b, Equation C.38, page 697)`
+ 
+### 1.7.3 $p$ Values
+Instead of having to compare the test statistic with critical values which are implied by the significance level $\alpha$, we directly compare $p$ with $\alpha$.  For two-sided t tests the formula for $p$ is:
+$$p =  2 * P(T_{n-1} > |t|) = 2(1 - F_{t_{n-1}}(|t|))$$
+where $F_{t_{n-1}}$ is the cdf of the $t_{n-1}$ distribution.  In R `stats::pt()` gives the cdf, so computing the $p$ value is `p = 2 * (1 - pt(q = abs(t), df = n-1))`
+
+<div class="task">Task: In the *audit* race discrimination example compute the $p$ value.</div> 
+
+1. The t statistic for $H_{0}$ was found to be -4.27681 so calculating the $p$ value is:
+```{r}
+t <- -4.27681
+n = 241
+df <- n - 1
+p <- stats::pt(q = t, df = df)
+```
+The $p$ value is `r p`.
+
+
+### 1.7.4 Automatic calculations
+:::task
+Task: Use the `stats::t.test()` function to perform hypothesis testing for job training data `(Wooldridge, Example C.2, page 690)`.
+:::
+
+1. Create the data set.
+```{r}
+scrap_rates_change <- c(-7,0,-1,.05,.29,.2,-.26,-1,-7.51,-.5,-.47,-.5,.16,1.67,-4,-2,1,-.08,-2,-.14)
+```
+
+2. Perform the automated two sided CI:
+```{r}
+stats::t.test(x = scrap_rates_change)
+```
+One sided test (Example c.6):
+```{r}
+stats::t.test(x = scrap_rates_change, alternative = "less")
+```
+Compare this result $t$ = -2.1507 with the result done above in computing the value using R stat functions.
+
+## 1.9 Monte Carlo Simulation
+
+### 1.9.1 Finite Sample Properties of Estimators
+
+If we repeatedly sample (of size $n$) a normally distributed random variable $Y \backsim Normal(\mu, \sigma^2)$ then the distribution of sample means ($\bar{Y}$) is:
+
+<center>$\bar{Y} \backsim Normal(\mu, \frac{\sigma^2}{n})$<span style="float:right;">[1.6]</span></center>
+
+See `(Wooldridge, Section C-2d The sampling Variance of Estimators, page 678)`
+
+:::task
+Task: Given a variable with population $\mu$ = 10 and $\sigma$ = 2, simulate taking 10000 repeated random samples of size $n$ = 100.
+:::
+
+1. Set the random seed:
+```{r}
+set.seed(123456)
+```
+
+2. Simulate taking 10000 repeated random samples of size $n$ = 100, from a population with $\mu$ = 10 and $\sigma$ = 2:
+```{r}
+y_bar <- numeric(10000)
+for(j in 1:10000){
+  sample <- rnorm(100, 10, 2)
+  y_bar[j] <- mean(sample)
+}
+```
+:::task
+Task: Compute the mean and variance of the sample means and compare them to the theoretical values in [1.6] above.
+:::
+
+Samples mean = `r mean(y_bar)`    Theoretical mean = 10
+Samples variance = `r var(y_bar)` Theoretical variance = 0.04
+
+:::task
+Task: Plot the density of the sample means overlapped with the theoretical density values.
+:::
+
+1. Compute the theoretical density:
+```{r}
+x_values <- seq(9,11,0.01)
+density_theory <- stats::dnorm(x = x_values, mean = 10, sd = sqrt(0.04))
+density_theory_dt <- data.table(
+  x = x_values,
+  y = density_theory
+)
+```
+
+2. Plot both the sample and theoretical densities:
+```{r}
+#| code-fold: true
+#| fig-width: 5
+#| fig-height: 5
+
+y_bar_dt <- data.table(x = y_bar)
+
+RplotterPkg::create_density_plot(
+  df = y_bar_dt,
+  aes_x = "x",
+  caption = "Densities of Sample Means(N = 100) from both Normal Simulated and Theoretical Pop",
+) + geom_line(data = density_theory_dt, aes(x = x, y = y), linetype = 2)
+```
+
+## 1.9.2 Asymptotic Properties of Estimators
+:::task
+Task: Plot the density of means from a variable that has a non-normal population $\chi^2$ distribution.
+:::
+
+1. Simulate a distribution of 10000 $\chi^2$ means from samples of $n$ = 100.
+```{r}
+set.seed(123456)
+y_bar <- numeric(10000)
+for(j in 1:10000){
+  sample <- rchisq(100, 1)
+  y_bar[j] <- mean(sample)
+}
+```
+
+2. Compute the theoretical density of the means as a normal distribution with $\mu = 1$ and $\sigma$ = 2/$n$: 
+```{r}
+x_values <- seq(0.5,1.6,0.01)
+density_theory <- stats::dnorm(x = x_values, mean = 1, sd = sqrt(2/100))
+density_theory_dt <- data.table(
+  x = x_values,
+  y = density_theory
+)
+```
+
+3. Plot both the sample and theoretical densities:
+```{r}
+#| code-fold: true
+#| fig-width: 5
+#| fig-height: 5
+
+y_bar_dt <- data.table(x = y_bar)
+
+RplotterPkg::create_density_plot(
+  df = y_bar_dt,
+  aes_x = "x",
+  caption = "Densities of Sample Means(N = 100) from both Chi-square Simulated and Theoretical Pop",
+) + geom_line(data = density_theory_dt, aes(x = x, y = y), linetype = 2)
+```
+

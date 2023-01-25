@@ -1,0 +1,74 @@
+---
+title: "Applied Predictive Modeling--Chapter 4 Overfitting"
+output: 
+   html_document:
+    toc: yes
+    toc_depth: 3
+    css: ../../style.css
+params:
+  date: !r Sys.Date()    
+---
+
+```{r,setup, include=FALSE, eval=TRUE}
+options(knitr.table.format = "html", width = 140)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 12, fig.height = 8)
+```
+
+<div>Author: Rick Dean</div>
+<div>Article date: `r params$date`</div>
+
+<div class="abstract">
+  <p class="abstract">Abstract</p>
+  The following notes/scripts/plots are inspired by Chapter 4 Over-Fitting and Model Tuning of [Applied Predictive Modeling](http://appliedpredictivemodeling.com/) by Max Kuhn and Kjell Johnson.
+</div>  
+
+```{r, warning=FALSE, message=FALSE}
+library(knitr)
+library(kableExtra)
+library(data.table)
+library(caret)
+library(grid)
+library(gtable)
+library(RregressPkg)
+library(RplotterPkg)
+library(AppliedPredictiveModeling)
+```
+
+## 4.6 Choosing Final Tuning Parameters
+
+### Set up data.table
+```{r}
+data(GermanCredit, package = "caret")
+credit_dt <- data.table::setDT(GermanCredit, keep.rownames = "id")
+```
+
+### Remove near-zero variance/duplicate predictors
+
+1. Remove near-zero:
+```{r}
+near_zero_vars <- caret::nearZeroVar(credit_dt)
+credit_dt <- credit_dt[, !..near_zero_vars]
+```
+
+2. Remove predictors with duplicate values:
+```{r}
+credit_dt <- credit_dt[, !c(
+  "CheckingAccountStatus.lt.0",
+  "SavingsAccountBonds.lt.100",
+  "EmploymentDuration.lt.1",
+  "EmploymentDuration.Unemployed",
+  "Personal.Male.Married.Widowed",
+  "Property.Unknown",
+  "Housing.ForFree")]
+```
+
+### Split the data
+<div class="task">Task: Split the data into training (80%) and test sets (20%).</div>
+```{r}
+set.seed(100)
+inTrain_idx_v <- caret::createDataPartition(credit_dt$Class, p = .8)[[1]]
+train_dt <- credit_dt[id %in% inTrain_idx_v]
+inTest_idx_v <- setdiff(as.numeric(credit_dt$id), inTrain_idx_v)
+test_dt <- credit_dt[id %in% inTest_idx_v]
+```
+

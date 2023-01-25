@@ -1,0 +1,274 @@
+---
+title: "PennState Stat 501 Lesson 7 - MLR Estimation & Prediction"
+author: "Rick Dean"
+format:
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: false
+    number-offset: 6
+    self-contained: true
+    smooth-scroll: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 5
+    fig-height: 5
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    minimal: false
+    css: ../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "The following notes, and R scripts are based on the online course [PennState Lesson 7 MLR Estimation and Prediction](https://online.stat.psu.edu/stat501/lesson/7)"
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(magrittr)
+library(here)
+library(data.table)
+library(RregressPkg)
+library(RplotterPkg)
+```
+
+# MLR Estimation, Prediction, Model Assumptions
+
+## 7.1 Confidence interval for the mean response
+A confidence interval reflects the uncertainty around the **mean** response values, while the prediction interval reflects the uncertainty around a **single** response value.
+
+Which one should we use? The answer to this question depends on the context and the purpose of the analysis.  Generally we are interested in specific individual predictions, so a prediction interval would be more appropriate. Using a confidence interval when you should be using a prediction interval will greatly underestimate the uncertainty in a given value.
+
+The standard error of the fit for **in-scope** $X_{h}$ new predictor values is given by: 
+$$se(\hat{y_{h}}) = \sqrt{MSE(X_{h}^T(X^TX)^{-1}X_{h})}$$ and the confidence interval is:
+
+$$\hat{y}_{h}  \pm  t_{(1-\alpha/2,n-p)} \times se(\hat{y_{h}})$$ where
+
+a.  The above formula for $\hat{y_{h}}$ is the **fitted value** when predictors $X_{h}$ are within "**scope of the model**. Section 7.2 presents the  **predicted value** when we have a new response $y_{new}.
+
+b.  $t_{(\alpha/2,n-p)}$ is the $t$-multiplier. Note that the $t$-multiplier has $n-p$ degrees of freedom because the confidence interval uses the mean square error (MSE) whose denominator is $n-p$.
+
+:::topic
+Example using the IQ Size data
+:::
+
+For the new observation $X_{h}$ we have *Brain* = 90.0 and *Height* = 70.0.
+```{r}
+new_X_df <- data.frame(
+  Brain = 90.0,
+  Height = 70.0
+)
+```
+
+Read in the data.
+```{r}
+data_path <- file.path(here::here(), "PennState-Stat 501 Regression Methods", "data/iqsize.txt")
+iqsize_dt <- data.table::fread(data_path) %>% 
+.[, .(PIQ, Brain, Height)]
+```
+
+:::topic
+Compute $\hat{y_{h}}$ and its confidence intervals manually.
+:::
+
+Estimate the OLS parameters.
+
+```{r}
+iqsize_ols_lst <- RregressPkg::ols_calc(
+  df = iqsize_dt,
+  formula_obj = PIQ ~ Brain + Height
+)
+```
+
+Compute the estimated fitted value $\hat{y}_{h}$.
+
+```{r}
+coef_vals <- iqsize_ols_lst$coef_vals
+y_h <- coef_vals[["(Intercept)"]] + coef_vals[["Brain"]] * 90.0 + coef_vals[["Height"]] * 70.0
+```
+
+$\hat{y}_{h}$ = `r y_h`
+
+Compute the se of the fit $se(\hat{y_{h}})$.
+
+```{r}
+X <- as.matrix(iqsize_dt[, !c("PIQ")])
+Inter_v <- c(Inter = 1)
+X <- cbind(Inter_v,X)
+x2_inv <- solve(t(X) %*% X)
+
+X_h <- matrix(c(1.0, 90.0, 70.0), ncol = 3)
+
+X_hh <- X_h %*% x2_inv %*% t(X_h)
+# get the mse from the above ols calculation
+se_fit <- sqrt(iqsize_ols_lst$mse * X_hh)[,1]
+```
+
+$se(\hat{y_{h}})$ = `r se_fit`
+
+Compute for $\alpha$ = .95, the upper and lower CI's for $\hat{y}_{h}$.
+Note the t multiplier $t_{(1-\alpha/2,n-p)}$ from `stats::qt()`.
+```{r}
+n = nrow(X)
+p = ncol(X)
+t = stats::qt(0.975, n - p)
+CI_upper <- y_h + t * se_fit
+CI_lower <- y_h - t * se_fit
+```
+
+CI_upper = `r CI_upper`
+
+CI_lower = `r CI_lower`
+
+The take away:
+
+> We can be 95% confident that the *average* performance IQ score of all college students with brain size = 90 and height = 70 is between 98.24 and 113.04 counts per 10,000.
+
+:::topic
+Estimate the confidence intervals using `stats::predict()`
+:::
+
+Define the linear model object.
+```{r}
+lm_obj <- lm(formula = PIQ ~ Brain + Height, data = iqsize_dt)
+lm_obj
+```
+
+Define one set of new values in a data.frame.
+Note that you can submit multiple new values.
+```{r}
+newvalues_df <- data.frame(
+  Brain = 90.0,
+  Height = 70.0
+)
+```
+
+Compute the fit and the 95% confidence intervals.
+Note that a named column matrix is returned with $\hat{y_{h}}$("fit"), its lower("lwr") and upper("upr") confidence limits.
+```{r}
+y_hat_confidence_mt <- stats::predict(
+  object = lm_obj,
+  newdata = newvalues_df,
+  interval = "confidence", 
+  level = 0.95
+)
+```
+$\hat{y_{h}}$ and its confidence intervals: `r y_hat_confidence_mt` 
+
+> ...the formula is useful for investigating what factors affect the width of the confidence interval for $\mu_{y}$.
+
+* The factors include:
+    + As the mean square error(MSE) decreases, the width of the interval decreases
+    + As we decrease the confidence level $\alpha$, the t-multiplier decreases, and hence the width of the         interval decreases.
+    + As we increase the sample size $n$, the width of the interval decreases.
+    + The closer our new predictor values $X_{h}$ to the average of the sample's predictor values, the            narrower the interval.
+    
+:::topic
+Compute the confidence intervals for a set of new predictor values $X_{h}$ that are further away from the sample's predictors' average.
+:::
+
+The average for $X_{Brain}$ = `r mean(iqsize_dt$Brain)`
+
+The average for $X_{Height}$ = `r mean(iqsize_dt$Height)`
+
+Set the new further values to Brain = 79 and Height = 62.
+```{r}
+newvalues_df = data.frame(
+  Brain = 79,
+  Height = 62
+)
+```
+
+Call `stats::predict()` and obtain the confidence intervals.
+```{r}
+y_hat_confidence_further_mt <- stats::predict(
+  object = lm_obj,
+  newdata = newvalues_df,
+  interval = "confidence", 
+  level = 0.95
+)
+```
+The earlier lower CI: `r y_hat_confidence_mt[[2]]` 
+
+The further lower CI: `r y_hat_confidence_further_mt[[2]]`
+
+The earlier upper CI: `r y_hat_confidence_mt[[3]]` 
+
+The further upper CI: `r y_hat_confidence_further_mt[[3]]`
+
+The width of the earlier CI: `r y_hat_confidence_mt[[3]] - y_hat_confidence_mt[[2]]`
+
+The width of the further CI: `r y_hat_confidence_further_mt[[3]] - y_hat_confidence_further_mt[[2]]`
+
+:::topic
+When is it okay to use the formula for the confidence interval of $\mu_{y}$?
+:::
+
+* Points to consider include:
+    + When our new predictor values $X_{h}$ are within the "scope of the model". Note that $X_{h}$ does not have to be an actual observation in the data set.
+    + When we meet linearity, independent errors, normal errors, equal error variances.
+
+
+## 7.2 Prediction interval for a new response 
+
+Estimating the prediction interval of new predictor values $X_{h}$.
+
+:::topic
+The formula.
+:::
+
+$$\hat{y}_{h}  \pm  t_{(1-\alpha/2,n-p)} \times\sqrt{MSE+(se(\hat{y_{h}}))^{2}}$$
+* where:
+    + $\hat{y_{h}}$ is the **"fitted value"** or **"predicted value"**
+    + $\sqrt{MSE+(se(\hat{y_{h}}))^{2}}$ is the **"standard error of the prediction"**
+
+
+:::topic
+Estimate the prediction intervals using `stats::predict()` for the IQ Size data.
+:::
+
+Reread the data set used previously.
+```{r}
+data_path <- file.path(here::here(), "PennState-Stat 501 Regression Methods", "data/iqsize.txt")
+iqsize_dt <- data.table::fread(data_path) %>% 
+.[, .(PIQ, Brain, Height)]
+```
+
+Define the predictor values.
+```{r}
+new_predictor_df <- data.frame(
+  Brain = 90.0,
+  Height = 70.0
+)
+```
+
+Compute the fit and the 95% prediction interval using `stats::predict()`.
+```{r}
+lm_obj <- stats::lm(PIQ ~ Brain + Height, data = iqsize_dt)
+yhat_prediction_mt <- stats::predict(
+  object = lm_obj, 
+  newdata = new_predictor_df,
+  interval = "prediction", 
+  level = 0.95
+)
+```
+$\hat{y_{h}}$ and its prediction intervals: `r yhat_prediction_mt` 
+
+> We can be 95% confident that the performance IQ score of an individual college student with brain size = 90 and Height = 70 will be between 65.35 and 145.93 counts per 10,000.
+
+:::topic
+When is it okay to use prediction interval for $y_{new}$ formula?
+:::
+
+It is a little more restrictive than the confidence interval.
+
+* Points to consider:
+    + When our new predictor values $X_{h}$ are within the "scope of the model". Note that $X_{h}$ does not have to be an actual observation in the data set.
+    + When we meet linearity, independent errors, normal errors, equal error variances. Unlike the case for the formula for the confidence interval, the prediction interval formula depends **strongly** on the condition that the error terms are normally distributed.
+    
+Because the prediction interval has the extra MSE term, the confidence interval will always be narrower than the cooresponding prediction interval. 
+
+Also, because of the extra term, the prediction's interval's standard error cannot get close to zero where the confidence interval can with increasing sample size.
+
+

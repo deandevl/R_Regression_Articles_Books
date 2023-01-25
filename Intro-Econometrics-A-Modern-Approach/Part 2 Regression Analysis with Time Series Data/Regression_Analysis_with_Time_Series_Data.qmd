@@ -1,0 +1,308 @@
+---
+title: "10-Regression Analysis with Time Series"
+author: "Rick Dean"
+format:
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: false
+    number-offset: 1
+    self-contained: true
+    smooth-scroll: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 5
+    fig-height: 5
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    minimal: false
+    css: ../../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "The following notes and scripts are based on the following sources: [Introductory Econometrics - A Modern Approach](https://www.amazon.com/Introductory-Econometrics-Modern-Approach-Standalone/dp/130527010X/ref=sr_1_2?dchild=1&keywords=Introductory+Econometrics%3A+A+Modern+Approach&qid=1597005903&s=books&sr=1-2) by Jeffrey M. Wooldridge is the main text for the statistical content. This text will be referenced as `(Wooldridge)`. The companion text [Using R for Introductory Econometrics](http://www.urfie.net/index.html) by Florian Heiss provides specific R scripts in support of the main text and the inspiration for my scripts, notes and graphics. I will reference this document as `(Heiss)`. The following is from **Part 2 - Regression Analysis with Time Series Data, Chapter 10 Basic Regression Analysis with Time Series Data** of `(Heiss)`.      "
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(data.table)
+library(magrittr)
+library(purrr)
+library(xts)
+library(zoo)
+library(dynlm)
+library(wooldridge)
+library(RregressPkg)
+library(RplotterPkg)
+library(RtsaPkg)
+```
+
+# 10-Regression Analysis with Time Series
+
+## 10.1 Static Time Series Models
+
+:::topic
+Effects of Inflation and Deficits on Interest Rates
+:::
+
+Set up the data.
+```{r}
+data("intdef", package = "wooldridge")
+intdef_dt <- data.table::as.data.table(intdef) %>%
+  .[,.(i3, inf, def)] %>% 
+  data.table::setnames(old = c("i3", "inf","def"), new = c("Interest_Rate","Inflation","Federal_Deficit"))
+```
+
+Compute the fitted values and show the coefficient values.
+```{r}
+intdef_ols <- RregressPkg::ols_calc(
+  df = intdef_dt,
+  formula_obj = Interest_Rate ~ Inflation + Federal_Deficit,
+  print_detail = T
+)
+```
+
+Plot the reponse and predictor variables.
+```{r}
+#| code-fold: true
+#| fig-width: 8
+#| fig-height: 5
+#| fig-cap: Inflation and Deficits on Interest Rates
+
+build_plot <- function(id, dt, predictors) {
+  y_title <- "Interest_Rate"
+  hide_y_tics <- FALSE
+  if(id == 2){
+    y_title <- NULL
+    hide_y_tics <- TRUE
+  }
+  predictor <- predictors[[id]]
+  plot_dt <- data.frame(
+    x = dt[[predictor]],
+    y = dt$Interest_Rate
+  )
+  aplot <- RplotterPkg::create_scatter_plot(
+    df = plot_dt,
+    aes_x = "x",
+    aes_y = "y",
+    x_title = predictor,
+    y_title = y_title,
+    hide_y_tics = hide_y_tics
+  )
+  return(aplot)
+}
+predictors <- c("Inflation","Federal_Deficit")
+plot_lst <- purrr::map(1:2,
+                       build_plot,
+                       dt = intdef_dt,
+                       predictors = predictors
+)
+layout <- list(
+  plots = plot_lst,
+  rows = c(1, 1),
+  cols = c(1, 2)
+)
+
+RplotterPkg::multi_panel_grid(
+  layout = layout,
+  col_widths = c(9.5, 9),
+  row_heights = 8
+)
+```
+
+## 10.2 Time Series Data Types in R
+
+### 10.2.1 Equispaced Time Series in R
+
+Set up the data.
+```{r}
+data(barium, package = "wooldridge")
+barium_dt <- data.table::as.data.table(barium) %>%
+  .[,.(chnimp)]
+```
+Create a time series (*ts*) object.
+```{r}
+imports_ts <- ts(data = barium_dt$chnimp, start = c(1978,2), frequency=12)
+str(imports_ts)
+```
+Plot the time series.
+```{r}
+#| code-fold: true
+#| fig-cap: Equispaced Time Series
+
+imports_ts_df <- RtsaPkg::tsObj_to_dt(imports_ts)
+RplotterPkg::create_scatter_plot(
+  df = imports_ts_df,
+  aes_x = "time",
+  aes_y = "value",
+  x_major_date_breaks = "1 year",
+  x_date_labels = "%Y",
+  connect = T,
+  show_pts = F,
+  x_title = "Time"
+)
+```
+
+### 10.2.2 Irregular Time Series in R
+
+Create time series *zoo* object of the interest rate data.
+```{r}
+data("intdef", package = "wooldridge")
+int_year_dt <- data.table::as.data.table(intdef) %>%
+  .[,.(i3, year)]
+
+int_year_zoo <- zoo::zoo(int_year_dt, order.by = int_year_dt$year, frequency = 12)
+str(int_year_zoo)
+```
+```{r}
+#| code-fold: true
+#| fig-cap: Interest Rate (3-month T-bills)
+
+int_year_zoo_df <- RtsaPkg::tsObj_to_dt(int_year_zoo, wide_form = T)
+RplotterPkg::create_scatter_plot(
+  df = int_year_zoo_df,
+  aes_x = "time",
+  aes_y = "i3",
+  x_title = "Date",
+  y_title = "Interest",
+  x_major_breaks = seq.Date(from = as.Date("1950", "%Y"), to = as.Date("2000", "%Y"), by = "10 year"),
+  x_date_labels = "%Y",
+  y_major_breaks = seq(2,14,2),
+  connect = T,
+  show_pts = F
+)
+```
+
+:::task
+Task:  Plot weekly closing prices on Apple stock from 2000 to 2021.
+:::
+
+Use *RtsaPkg::get_tiingo_stock_prices* function to get the data from Tiingo as the source.
+```{r}
+apple_stocks_dt <- RtsaPkg::get_tiingo_stock_prices(
+  symbols = "AAPL",
+  from = "2000-01-01",
+  to = "2021-01-01",
+  periodicity = "weekly"
+)
+apple_stocks_xts <- RtsaPkg::df_to_xts(
+  df = apple_stocks_dt,
+  time_col = "Date",
+  data_cols = "AdjClose"
+)
+str(apple_stocks_xts)
+```
+
+Plot the data.
+```{r, warning=FALSE}
+#| code-fold: true
+#| fig-cap: Apple Adjusted Closing Stock Prices
+
+RplotterPkg::create_scatter_plot(
+  df = apple_stocks_dt,
+  aes_x = "Date",
+  aes_y = "AdjClose",
+  x_date_labels = "%Y",
+  x_limits = c(as.Date("2000", "%Y"), as.Date("2022", "%Y")),
+  x_major_breaks = seq(from = as.Date("2000", "%Y"), to = as.Date("2022", "%Y"), by = "2 year"),
+  y_major_breaks = seq(0,140,20),
+  y_limits = c(0,140),
+  x_title = NULL,
+  y_title = NULL,
+  connect = T,
+  show_pts = F,
+  line_color = "purple"
+)
+```
+
+## 10.3 Other Time Series Models
+### 10.3.1 The *dynlm::* Package
+### 10.3.2 Finite Distributed Lag Models
+
+:::task
+Task: Model Effects of Personal Tax Exemption on Fertility Rates
+:::
+
+Set up the data.
+```{r}
+data("fertil3", package = "wooldridge")
+```
+
+Define yearly time series beginning in 1913.
+```{r}
+fertil3_ts <- ts(fertil3, start = 1913)
+str(fertil3_ts)
+```
+Define linear regression model with lags using *dynlm::dynlm()*.
+```{r}
+fertil_3_lm <- dynlm::dynlm(gfr ~ pe + L(pe) + L(pe,2) + ww2 + pill, data = fertil3_ts)
+```
+
+Summarize *fertil_3_lm*.
+```{r}
+summary(fertil_3_lm)
+```
+Perform an $F$-test with the null hypothesis that the lag coefficients equal zero.
+```{r}
+car::linearHypothesis(fertil_3_lm,c("pe", "L(pe)", "L(pe, 2)"))
+```
+:::task
+Task: Repeat the OLS estimate by lagging the data and using *Rregress::ols_calc()*
+:::
+
+Convert the data to a *data.table*.
+```{r}
+data("fertil3", package = "wooldridge")
+fertil3_dt <- data.table::as.data.table(fertil3) %>%
+  .[, .(gfr, pe, ww2, pill)]
+```
+
+Lag the *pe* predictor by a factor of 2.
+```{r}
+fertil3_dt[, c("pe_lag1", "pe_lag2") := shift(pe, 1:2, type = "lag")]
+```
+
+Compute the OLS.
+```{r}
+formula_obj <- gfr ~ pe + pe_lag1 + pe_lag2 + ww2 + pill
+fertil3_ols <- RregressPkg::ols_calc(df = fertil3_dt, formula_obj = formula_obj)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: gfr ~ pe + pe_lag1 + pe_lag2 + ww2 + pill
+
+RplotterPkg::create_table(
+  x = fertil3_ols$coef_df,
+  container_width_px = 400
+)
+```
+
+### 10.3.3 Trends
+
+:::task
+Task: Include a time predictor in estimating housing investment from prices.
+:::
+
+Set up the data.
+```{r}
+data("hseinv", package = "wooldridge")
+hseinv_dt <- data.table::as.data.table(hseinv) %>%
+  .[, .(invpc, year, price)]
+```
+
+Compute the OLS.
+```{r}
+formula_obj <- log(invpc) ~ year + log(price)
+hseinv_ols <- RregressPkg::ols_calc(df = hseinv_dt, formula_obj = formula_obj)
+```
+```{r}
+#| code-fold: true
+#| tbl-cap: log(invpc) ~ year + log(price)
+
+RplotterPkg::create_table(
+  x = hseinv_ols$coef_df,
+  container_width_px = 400
+)
+```

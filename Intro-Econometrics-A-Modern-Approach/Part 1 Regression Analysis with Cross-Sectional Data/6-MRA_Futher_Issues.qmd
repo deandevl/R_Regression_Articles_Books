@@ -1,0 +1,234 @@
+---
+title: "6-MRA_Further Issues"
+author: "Rick Dean"
+format:
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: false
+    number-offset: 1
+    self-contained: true
+    smooth-scroll: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 8
+    fig-height: 8
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    minimal: false
+    css: ../../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "The following notes and scripts are based on the following sources: [Introductory Econometrics - A Modern Approach](https://www.amazon.com/Introductory-Econometrics-Modern-Approach-Standalone/dp/130527010X/ref=sr_1_2?dchild=1&keywords=Introductory+Econometrics%3A+A+Modern+Approach&qid=1597005903&s=books&sr=1-2) by Jeffrey M. Wooldridge is the main text for the statistical content. This text will be referenced as `(Wooldridge)`. The companion text [Using R for Introductory Econometrics](http://www.urfie.net/index.html) by Florian Heiss provides specific R scripts in support of the main text and the inspiration for my scripts, notes and graphics. I will reference this document as `(Heiss)`. The following is from **Part 1 - Regression Analysis with Cross-Sectional Data, Chapter 6 MRA Further Issues** of `(Heiss)`."
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(data.table)
+library(magrittr)
+library(wooldridge)
+library(ggplot2)
+library(RregressPkg)
+library(RplotterPkg)
+```
+
+# 6 Multiple Regression Analysis: Further Issues
+
+## 6.1 Model Formulae
+
+## 6.2 Prediction
+
+Predicting the value of the response variable $y$ given certain values of the predictors $x_{1}, x_{2} ... x_{k}$.
+
+In this section we will be following `(Wooldridge page 186 Sectiion 6-4)` to incorporate his techniques rather than using `stats::predict()` from R.
+
+### 6.2.1 Confidence intervals for predictions
+
+Given a OLS model:
+
+<center>$\hat{y} = \hat{\beta_{0}} + \hat{\beta_{1}}x_{1} + \hat{\beta_{2}}x_{2} + ... \hat{\beta_{k}}x_{k}$[[6.27 Wooldridge page 186]]{style="float:right;"}</center><br>
+
+and specific values for the predictors: $c_{1}, c_{2} ... c_{k}$
+
+We want to measure the uncertainty for the predicted value $\hat{\theta_{0}}$ where:
+
+<center>$\hat{\theta_{0}} = \hat{\beta_{0}} + \hat{\beta_{1}}c_{1} + \hat{\beta_{2}}c_{2} + ... \hat{\beta_{k}}c_{k}$[[6.29 Wooldridge page 187]]{style="float:right;"}</center><br>
+
+A `[Wooldridge]` trick is described for estimating a standard error and subsequently a confidence interval for $\hat{\theta_{0}}$ by solving for the intercept $\hat{\beta_{0}}$ in equation [6.29] and plugging it into equation [6.27] to obtain:
+
+<center>$y = \hat{\theta_{0}} + \beta_{1}(x_{1} - c_{1}) + \beta_{2}(x_{2} - c_{2}) + ... + \beta_{k}(x_{k} - c_{k})$[[6.30 Wooldridge page 187]]{style="float:right;"}</center><br>
+
+We can now subtract $c_{1}, c_{2} ... c_{k}$ from each of the sampled $x_{1}, x_{2} ... x_{k}$ and perform the OLS estimates on equation [6.30] where $\hat{\theta_{0}}$ is the intercept with an estimated standard error. Finding the standard error will lead us to defining the $t$-statistic based confidence interval.
+
+:::task
+Task: Find the confidence interval for predicted college GPA (`wooldridge::gpa2`)
+:::
+
+1.Compute the OLS for `colgpa ~ sat + hsperc + hsize + hsize^2`:
+```{r}
+data("gpa2", package = "wooldridge")
+gpa2_ols_lst <- RregressPkg::ols_calc(
+  df = gpa2,
+  formula_obj = colgpa ~ sat + hsperc + hsize + I(hsize^2)
+)
+```
+
+2.Show the coefficients and their standard errors:
+```{r}
+#| code-fold: true
+
+RplotterPkg::create_table(
+  x = gpa2_ols_lst$coef_df,
+  container_width_px = 400
+)
+```
+
+3.Assign a specific set of values for the predictors (i.e. $c_{1}, c_{2} ... c_{k}$) and subtract these values from our sample predictors $x_{1}, x_{2} ... x_{k}$:
+```{r}
+gpa2_dt <- data.table::as.data.table(gpa2) %>%
+.[, .(colgpa = colgpa, sat = sat - 1200, hsperc = hsperc - 30, hsize = hsize - 5)]
+head(gpa2_dt)
+```
+
+4.Re-compute the OLS estimate on the new set of predictor values:
+```{r}
+gpa2_ols_new_lst <- RregressPkg::ols_calc(
+  df = gpa2_dt,
+  formula_obj = colgpa ~ sat + hsperc + hsize + I(hsize^2)
+)
+```
+
+5.  Show the coefficients and their standard errors:
+```{r}
+#| code-fold: true
+
+RplotterPkg::create_table(
+  x = gpa2_ols_new_lst$coef_df,
+  container_width_px = 400
+)
+```
+
+Note that there is no change in the coefficient values -- the only change is our intercept value and standard error which is the standard error for $\hat{\theta_{0}}$ -- our response variable from equation [6.29] above.
+
+Now that we have the value for $\hat{\theta_{0}}$ (2.70) and its standard error (0.019) we can compute its $t$-statistic based confidence intervals.
+
+6.Compute $\hat{\theta_{0}}$ confidence intervals at the 95% confidence level:
+```{r}
+t_val <- stats::qt(0.975, gpa2_ols_new_lst$n -1)
+CI_upper <- gpa2_ols_new_lst$coef_vals[["(Intercept)"]] + gpa2_ols_new_lst$coef_se_vals[["(Intercept)"]] * t_val
+CI_lower <- gpa2_ols_new_lst$coef_vals[["(Intercept)"]] - gpa2_ols_new_lst$coef_se_vals[["(Intercept)"]] * t_val
+```
+
+The upper CI for $\hat{\theta_{0}}$ is `r CI_upper`
+
+The lower CI for $\hat{\theta_{0}}$ is `r CI_lower`
+
+:::task
+Task: Compare the above results with results using R's `stats::predict()`.
+:::
+
+1.Compute the model using `stats::lm()`:
+```{r}
+gpa2_lm <- stats::lm(colgpa ~ sat + hsperc + hsize + I(hsize^2), data = gpa2)
+gpa2_lm
+```
+
+2.Compute point estimate prediction:
+
+```{r}
+c_values <- data.frame(sat = 1200, hsperc = 30, hsize = 5)
+theta_0 <- stats::predict(gpa2_lm, c_values)
+theta_0
+```
+
+3.Compute confidence interval:
+
+```{r}
+ci_theta_0 <- stats::predict(gpa2_lm, c_values, interval = "confidence")
+ci_theta_0
+```
+
+:::takeaway
+Take Away: The two approaches agree.
+:::
+ 
+### 6.2.2 Prediction Intervals
+
+Confidence intervals reflect the uncertainty about the **expected value** of the response variable given values for the predictors. In predicting an **individual** we have to account for the additional uncertainty regarding the unobserved characteristics reflected by the error term $\mu$.
+
+We now have two sources of variation:
+
+a. The sampling error in estimating the predictor coefficients which we did in equation [6.29] above for $\hat{\theta_{0}}$
+
+b. The variance of the error in the population $\mu$
+
+:::task
+Task: Use `RregressPkg::ols_intervals()` to estimate prediction intervals for the college gpa (`wooldridge::gpa2`).
+:::
+
+1.Read the data:
+```{r}
+gpa_2_dt <- data.table::as.data.table(wooldridge::gpa2) %>%
+.[, .(colgpa, sat, hsperc, hsize)]
+```
+
+2.Define the predictor data points to estimate responses:
+```{r}
+predictor_vals_df <- data.frame(
+  sat = c(1200, 900, 1400),
+  hsperc = c(30, 20, 5),
+  hsize = c(5, 3, 1)
+)
+```
+
+3.Call `RregressPkg::ols_intervals()`:
+```{r}
+gpa_2_response_df <- RregressPkg::ols_intervals(
+  df = gpa_2_dt,
+  formula_obj = colgpa ~ sat + hsperc + hsize + I(hsize^2),
+  predictor_vals_df = predictor_vals_df,
+  confid_level = 0.99
+)
+```
+
+4.Display the results:
+```{r}
+#| code-fold: true
+
+RplotterPkg::create_table(
+  x = gpa_2_response_df,
+  container_width_px = 400
+)
+```
+
+### 6.2.3 Effect plots for nonlinear specifications
+
+<div class="task">Task: Using `RregressPkg::plot_predictor()` plot the effect of predictor variable *rooms* on the response variable *log(price)* in the `wooldridge::hprice2` data set. </div>
+
+1.Read the data:
+```{r}
+data("hprice2", package = "wooldridge")
+
+hprice2_dt <- data.table::as.data.table(hprice2) %>%
+  .[, .(price, nox, dist, rooms, stratio)]
+```
+
+2.Call `RregressPkg::plot_predictor()`:
+```{r}
+#| fold-code: true
+#| fig-width: 5
+#| fig-height: 5
+#| fig-cap: Influence of 'rooms' on 'log(price)'
+
+rooms_effect_lst <- RregressPkg::plot_predictor(
+  df = hprice2_dt,
+  formula_obj = log(price) ~ log(nox)+log(dist)+rooms+I(rooms^2)+stratio,
+  predictor_vals_df = data.frame(rooms = seq(4, 8, 0.1)),
+  x_title = "rooms",
+  y_title = "log(price)",
+  rot_y_tic_label = T
+)
+rooms_effect_lst$effect_plot
+```

@@ -1,0 +1,537 @@
+---
+title: "The Normal Distribution"
+author: "Rick Dean"
+format:
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: true
+    number-offset: 0
+    self-contained: true
+    smooth-scroll: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 5
+    fig-height: 5
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    minimal: false
+    css: ../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "The following are notes and R scripts inspired by the article [The Normal Distribution, Central Limit Theorem, and Inference from a Sample](http://svmiller.com/blog/2020/03/normal-distribution-central-limit-theorem-inference/) by Steve Miller."
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(data.table)
+library(forcats)
+library(purrr)
+library(ggplot2)
+library(RplotterPkg)
+library(RregressPkg)
+library(here)
+```
+
+# The Normal Distribution
+
+:::topic
+The equation.
+:::
+
+> ...a distribution defined by two parameters, $\mu$ and $\sigma^{2}$. $\mu$ is a “location parameter”, which defines the central tendency. $\sigma^{2}$ is the “scale parameter”, which defines the width of the distribution and how short the distribution is. It’s formally given as follows:
+
+$$f(x|\mu,\sigma^{2}) = \frac{1}{\sqrt{2\pi\sigma^{2}}}e\lbrace-\frac{(x-\mu)^{2}}{2\sigma^{2}}\rbrace$$
+
+:::topic
+The plot.
+:::
+
+Plotted with $\mu=0$ and $\sigma^{2} = 1$:
+```{r}
+#| code-fold: true
+#| fig-cap: A simple normal density function
+
+x <- seq(-4,4,0.01)
+y <- stats::dnorm(x)
+dt <- data.table::data.table(
+  x = x,
+  y = y
+)
+RplotterPkg::create_scatter_plot(
+  df = dt,
+  aes_x = "x",
+  aes_y = "y",
+  connect = T,
+  show_pts = F
+)
+```
+
+:::topic
+The parts.
+:::
+
+The parts of the normal distribution include:
+
+The tails are asymptote -- the tails approximate 0 but never touch or surpass 0.
+
+The "kernel" $\lbrace-\frac{(x-\mu)^{2}}{2\sigma^{2}}\rbrace$ is a basic parabola, which making it negative flips the parabola upside down. Exponentiating squeezes the parabola, adjusts the height, and makes the tails asymptotic to 0. Compare a basic parabola with an exponentiated negative parabola $e\lbrace-\frac{(x-\mu)^{2}}{2\sigma^{2}}\rbrace$.
+
+:::topic
+Basic negative parabola.
+:::
+
+```{r}
+basic_fun <- function(x){-x^2/2}
+x_basic <- seq(-4,4,0.01)
+y_basic <- as.numeric(lapply(x_basic,basic_fun))
+basic_dt <- data.table::data.table(
+  x = x_basic,
+  y = y_basic
+)
+```
+
+```{r}
+#| code-fold: true
+#| fig-cap: Basic parabola
+
+RplotterPkg::create_scatter_plot(
+  df = basic_dt,
+  aes_x = "x",
+  aes_y = "y",
+  title = "",
+  connect = T,
+  show_pts = F
+)
+```
+
+:::topic
+Exponentiated negative parabola.
+:::
+
+```{r}
+exp_fun <- function(x){exp(-x^2/2)}
+x_exp <- seq(-4,4,0.01)
+y_exp <- as.numeric(lapply(x_exp,exp_fun))
+exp_dt <- data.table::data.table(
+  x = x_exp,
+  y = y_exp
+)
+```
+
+```{r}
+#| code-fold: true
+#| fig-cap: Exponentiated parabola
+
+RplotterPkg::create_scatter_plot(
+  df = exp_dt,
+  aes_x = "x",
+  aes_y = "y",
+  title = "",
+  connect = T,
+  show_pts = F
+)
+```
+
+
+The \frac{1}{\sqrt{2\pi\sigma^{2}}} term scales the height of the distribution. For the case where $\mu = 0$ and $\sigma = 1$, the term becomes $\frac{1}{\sqrt{2\pi\sigma^{2}}}$ which scales the height to about .398 as shown in the first plot above.
+
+The distribution is perfectly symetrical. $\mu$ determines the location of the distribution as well as its central tendency. All three measures of central tendency -- mean, mode, median will be the same.
+
+The probability distribution is a "function" -- no one point is a probability.
+
+> ...the function does not reveal the probability of $x$, unlike the Poisson and binomial distributions, and the probability of any one value is effectively 0. However, the area under the curve is the full domain of the probability space and sums to 1.
+
+:::topic
+Area under the curve.
+:::
+
+The probability of selecting a number between two points on the x-axis equals the area under the curve between those two points.
+
+Consider a population normal distribution with $\mu$ = 0 and $\sigma$ = 1. Generate a random sample from this population and plot its density.
+
+```{r}
+df <- data.frame(
+  y = rnorm(10000)
+)
+```
+
+```{r}
+#| code-fold: true
+#| fig-cap: Random sample from a normal distribution
+
+
+RplotterPkg::create_density_plot(
+  df = df,
+  aes_x = "y",
+  n = 10000,
+  cum_prob = c(0.025,0.975),
+  density_fill = "blue",
+  density_color = "darkblue"
+)
+```
+
+In this random sample we see that approximately 95% of the distribution of observations is between +-1.95 standard deviation units from the mean of 0.
+
+## Central Limit Theorem
+
+:::topic
+Five important points.
+:::
+
+> In plain English, central limit theorem’s five important points are:
+
+1. Infinity samples of any size $n$
+
+2. From a population of $N$ units (where $N>n$) will...
+
+3. ...have sample means $\bar{x}$ that are normally distributed. 
+
+4. The mean of sample means converges on the known population mean $\mu$ 
+
+5. Random sampling error would equal the standard error of the sample mean $\frac{\sigma}{\sqrt{n}}$.
+
+## Sampling from a population
+
+:::topic
+Read in the 2018 ANES pilot study for Donald Trump.
+:::
+
+```{r}
+data_path <- file.path(here::here(), "Miller", "data", "therms18.rda")
+load(data_path)
+therms_dt <- data.table(
+  Rating = na.omit(Therms18$fttrump)
+)
+```
+
+Plot the histogram of the Trump ratings.
+```{r}
+#| code-fold: true
+#| fig-cap: The Thermometer Ratings for Donald Trump
+
+RplotterPkg::create_bar_plot(
+  df = therms_dt,
+  aes_x = "Rating",
+  bar_fill = "blue",
+  bar_alpha = 0.5,
+  rot_y_tic_label = T,
+  y_limits = c(0,500),
+  y_major_breaks = seq(0,500,100)
+)
+```
+
+Show descriptive statistics.
+```{r}
+get_mode <- function(x){
+  uniq <- unique(x)
+  mode_val <- uniq[which.max(tabulate(match(x,uniq)))]
+}
+therms_stats_dt <- data.table(
+  N = length(therms_dt$Rating),
+  Minimum = min(therms_dt$Rating),
+  Maximum = max(therms_dt$Rating),
+  Mode = get_mode(therms_dt$Rating),
+  Median = median(therms_dt$Rating),
+  Mean = mean(therms_dt$Rating),
+  SD = sd(therms_dt$Rating)
+)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: Descriptive statistics of the Thermometer Rating for Donald Trump
+ 
+RplotterPkg::create_table(
+  x = therms_stats_dt,
+  source_note = "2018 Pilot Study, ANES",
+  container_width_px = 600
+)
+```
+
+:::topic
+Create a simulated population of the above data with 250000 observations.
+:::
+
+```{r}
+therms_beta_lst <- RregressPkg::plot_beta_distrib(
+  n = 250000,
+  mean = mean(therms_dt$Rating),
+  sd = sd(therms_dt$Rating),
+  min_val = 0,
+  max_val = 100,
+  seed = 8675309,
+  bins = 100,
+  title = NULL,
+  x_title = "Rating",
+  bar_fill = "blue",
+  bar_alpha = 0.5
+)
+```
+
+Show the descriptive statistics of the population.
+```{r}
+pop_data <- therms_beta_lst$scaled
+pop_stats_dt <- data.table(
+  N = length(pop_data),
+  Minimum = min(pop_data),
+  Maximum = max(pop_data),
+  Mode = get_mode(pop_data),
+  Median = median(pop_data),
+  Mean = mean(pop_data),
+  SD = sd(pop_data)
+)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: Descriptive statistics of the simulated Thermometer Ratings
+
+RplotterPkg::create_table(
+  x = pop_stats_dt,
+  container_width_px = 600
+)
+```
+
+Plot a histogram of the population.
+```{r}
+#| code-fold: true
+#| fig-cap: Histogram of the simulated Thermometer Ratings
+
+therms_beta_lst$histo_plot
+```
+
+:::topic
+Get 10000 samples of size 10 from the above simulated population and compute their means.
+:::
+
+```{r}
+set.seed(8675309)
+get_sample_means <- function(samples, sample_size, data_pop){
+  means <- c()
+  for(i in 1:samples){
+    means <- c(means, mean(base::sample(x = data_pop, size = sample_size, replace = F)))
+  }
+  return(means)
+}
+simulated_means <- get_sample_means(samples = 10000, sample_size = 10, data_pop = therms_beta_lst$scaled)
+```
+
+Plot the density of the sample means.
+```{r}
+#| code-fold: true
+#| fig-cap: The distribution of 10000 sample means from the population (each sample size = 10)
+
+df <- data.frame(means = simulated_means)
+RplotterPkg::create_density_plot(
+  df = df,
+  aes_x = "means",
+  x_title = "Sample Means",
+  rot_y_tic_label = T,
+  density_fill = "blue",
+  density_alpha = 0.5,
+  x_major_breaks = seq(0,100,10)
+)
+```
+
+## Random Sampling Error
+The random sampling error for the mean is defined as $\frac{\sigma}{\sqrt{n}}$ where the variation component $\sigma$ is the standard deviation inherent in the population and the sample size component $\sqrt{n}$ is the square root of the sample size.
+
+:::topic
+Compare 8 sample sizes replicated 10 times
+:::
+
+What is the ideal sample size from our above population of 250000 observations? Let's compare 8 samples of varying size.
+
+Create a data.table with columns for sample size and sample means replicated 10 times for each sample size.
+```{r}
+samp_sizes <- c(10, 25, 100, 400, 1000, 2000, 4000, 10000)
+
+set.seed(8675309)
+samples_lst <- list()
+for(samp_sz in samp_sizes) {
+  samples_lst[[paste0("samp size ", samp_sz)]] = data.table(
+    samp_num = as.factor(1:10),
+    samp_sz = samp_sz, 
+    samp_means = unlist(lapply(1:10, function(i){x <- mean(sample(therms_beta_lst$scaled, samp_sz, replace = F))}))
+  )
+}
+samples_dt <- data.table::rbindlist(samples_lst, use.names = T)
+
+samples_dt[, `:=` (samp_sz_factor = as.factor(samp_sz), samp_sz_label = forcats::fct_inorder(paste0("Sample Size: ", samp_sz)))]
+```
+
+Plot the replicated means across the different sizes.
+```{r}
+#| code-fold: true
+#| fig-cap: Sample means of varying sample sizes from a population (250000 obs)
+
+RplotterPkg::create_scatter_plot(
+  df = samples_dt,
+  aes_x = "samp_sz_factor",
+  aes_y = "samp_means",
+  x_title = "Sample Size",
+  y_title = "Sample Mean",
+  rot_y_tic_label = T,
+  pts_fill = "black",
+  pts_size = 2.5,
+  pts_line_alpha = 0.5
+) + ggplot2::geom_hline(yintercept = mean(therms_beta_lst$scaled), linetype = "dashed")
+```
+
+:::note
+Note the diminishing spread of means emerge around sample size of 1000. It does appear that the effect of the sample size component on random sampling error $\frac{1}{\sqrt{n}}$ is non-linear.
+:::
+
+> ...which suggest diminishing returns from an increased sample size that careens into non-random sampling territory if the researcher is not careful.
+
+:::topic
+Confidence intervals of means that include the population mean.
+:::
+
+> The 95% confidence interval is the range of which 95% of all the possible sample means would fall by chance, given what we know about the normal distribution.
+
+Compute the 95% confidence intervals for the 10 replicated sample means of the 8 sample sizes and compare with a range plot.
+
+Compute the standard error for each of the 8 sample sizes.
+```{r}
+pop_sd <- sd(therms_beta_lst$scaled)
+samples_dt[, se := pop_sd/sqrt(samp_sz)]
+```
+
+Compute the lower/upper confidence interval values.
+```{r}
+samples_dt[, `:=`(lb95 = samp_means - 1.96 * se, up95 = samp_means + 1.96 * se)]
+samples_dt[, lb95 := fifelse(lb95 < 0.0, 0.0, lb95)]
+```
+
+Plot the means and associated confidence ranges in a range plot for each of the 8 sample sizes.
+The true population mean is `r mean(therms_beta_lst$scaled)`
+```{r, warning=FALSE}
+#| code-fold: true
+#| fig-width: 14
+#| fig-height: 12
+#| fig-cap: 10 sample means, of 8 varying sample sizes, from the population data
+
+build_plot <- function(id,dt,samp_sz_v){
+  plot_dt <- dt[samp_sz == samp_sz_v[[id]]]
+  hide_x_tics <- TRUE
+  hide_y_tics <- TRUE
+  if(id %in% c(1, 4, 7)){
+    hide_y_tics = FALSE
+  }
+  if(id %in% c(6,7,8)){
+    hide_x_tics <- FALSE
+  }
+  aplot <- RplotterPkg::create_range_plot(
+    df = plot_dt,
+    aes_x = "samp_num",
+    aes_y = "samp_means",
+    aes_y_min = "lb95",
+    aes_y_max = "up95",
+    subtitle = paste0("Sample sz: ", samp_sz_v[[id]]),
+    hide_x_tics = hide_x_tics,
+    hide_y_tics = hide_y_tics,
+    y_limits = c(0,60),
+    y_major_breaks = seq(0,60,10),
+    rot_y_tic_label = T,
+    do_coord_flip = T,
+    pts_fill = "black",
+    line_pts_color = "red"
+  ) + 
+    geom_hline(yintercept = mean(therms_beta_lst$scaled), linetype = "dashed",color="blue",linewidth=1.5)
+}
+plot_lst <- purrr::map(
+  1:8,
+  build_plot,
+  dt = samples_dt,
+  samp_sz_v = samp_sizes
+)
+layout <- list(
+  plots = plot_lst,
+  rows = c(1, 1, 1, 2, 2, 2, 3, 3),
+  cols = c(1, 2, 3, 1, 2, 3, 1, 2)
+)
+RplotterPkg::multi_panel_grid(
+  layout = layout,
+  col_widths = c(10.5, 10, 10),
+  row_heights = c(8, 8, 8)
+)
+```
+
+> Basically, if you can't get infinity samples and have only one shot at a random sample of a target population, aim for about 1000 respondents.
+
+## Inference from sample and population mean
+
+:::topic
+Looking at the 10 replicated means across the 8 samples sizes.
+:::
+
+Create the "means" data.table.
+```{r}
+means_dt <- as.data.table(matrix(samples_dt$samp_means, nrow = 10, ncol = 8))
+col_names <- unlist(lapply(samp_sizes, function(sz) {paste0("Size: ",sz)}))
+means_dt <- data.table::setnames(means_dt, colnames(means_dt),col_names)
+means_dt[, Sample_No := lapply(1:10, function(i){paste0("Sample #",i)})]
+means_dt <- data.table::setcolorder(means_dt, "Sample_No")
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: 10 sample means, of 8 varying sample sizes, from the population data
+
+RplotterPkg::create_table(
+  x = means_dt,
+  container_width_px = 700
+)
+```
+
+The lowest mean in the 1000-sample group is the ninth sample mean with a value of 37.1 where the true mean is 40.01578.  What is the probability we observed something at least that far from the true mean? 
+
+<!-- 1. Show the population descriptive statistics again: -->
+<!-- ```{r} -->
+<!-- pop_stats_dt <- data.table( -->
+<!--   N = length(pop_data), -->
+<!--   Minimum = min(pop_data), -->
+<!--   Maximum = max(pop_data), -->
+<!--   Mode = get_mode(pop_data), -->
+<!--   Median = median(pop_data), -->
+<!--   Mean = mean(pop_data), -->
+<!--   SD = sd(pop_data) -->
+<!-- ) -->
+<!-- RplotterPkg::create_table( -->
+<!--   x = pop_stats_dt, -->
+<!--   caption = "Population Descriptive Statistics of the Simulated Thermometer Ratings", -->
+<!--   head_bkgd = "blue", -->
+<!--   head_col = "white", -->
+<!--   full_width = T, -->
+<!--   align_v = rep("c",7), -->
+<!--   footnote_title = "Source:", -->
+<!--   footnote = "RregressPkg::mom_beta()" -->
+<!-- ) -->
+<!-- ``` -->
+
+Compute the population mean standard error $\frac{\sigma}{\sqrt{n}}$:
+```{r}
+pop_se <- pop_stats_dt$SD/sqrt(1000)
+```
+
+The population mean standard error = `r pop_se`.
+
+Compute the z-score for the fluke mean of 37.1:
+```{r}
+z_score <- (37.1 - pop_stats_dt$Mean)/pop_se
+```
+
+The fluke z-score = `r z_score`.
+
+Compute the $p-value$:
+```{r}
+p_val <- 1 - stats::pnorm(abs(z_score))
+```
+
+The $p-value$ = `r p_val`
+
+This indicates 1 chance in a 100 of getting a mean of 37.1 from a 1000 sized sample.

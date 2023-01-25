@@ -1,0 +1,345 @@
+---
+title: "A Pedagogical Exercise in Regression"
+author: "Rick Dean"
+format:
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: true
+    number-offset: 0
+    self-contained: true
+    smooth-scroll: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 5
+    fig-height: 5
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    minimal: false
+    css: ../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "The following are notes and R scripts inspired by the article [What Do We Know About British Attitudes Toward Immigration? A Pedagogical Exercise of Sample Inference and Regression](http://svmiller.com/blog/2020/03/what-explains-british-attitudes-toward-immigration-a-pedagogical-example/) by Steve Miller."
+---
+
+Load the Required R Packages.
+```{r, warning=FALSE, message=FALSE}
+#| label: load-packages
+
+library(here)
+library(data.table)
+library(magrittr)
+library(ggplot2)
+library(RplotterPkg)
+library(RregressPkg)
+```
+
+# A Pedagogical Exercise in Regression
+
+## Prepare and summarize the data
+Read the data frame from the European Social Survey of about 2,000 residents of the United Kingdom and convert to a `data.table`.
+
+```{r}
+data_path <- file.path(here::here(), "Miller", "data", "ESS9GB.rda")
+load(data_path)
+data_dt <- data.table::as.data.table(ESS9GB)
+```
+
+Filter for just British respondents born in the UK.
+```{r}
+data_dt <- data_dt[cntry == "GB" & brncntr == 1]
+```
+
+Select and rename a subset of the available variables for later regression.
+```{r}
+data_dt <- data_dt[, .(
+  ImmigSentiment = immigsent,
+  Age = agea,
+  Female =female,
+  YrsEdu =eduyrs,
+  UnEmploy = uempla,
+  HouseIncome = hinctnta,
+  Ideology = lrscale,
+  Region = as.factor(region)
+)]
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: British respondents born in the UK
+
+RplotterPkg::create_table(
+  x = data_dt[1:6,],
+  container_width_px = 700
+)
+```
+
+:::topic
+Complete a statistical summary of the dependent variable *ImmigSentiment*
+:::
+
+```{r}
+summary_dt <- data_dt[, .(
+    Mean = round(mean(ImmigSentiment, na.rm = T), 3),
+    Median = round(median(ImmigSentiment, na.rm = T), 3),
+    SD = round(sd(ImmigSentiment, na.rm = T), 3),
+    Minimum = round(min(ImmigSentiment, na.rm = T), 3),
+    Maximum = round(max(ImmigSentiment, na.rm = T), 3),
+    N = sum(!is.na(ImmigSentiment)),
+    Miss_Responses = sum(is.na(ImmigSentiment))
+)]
+```
+```{r}
+#| code-fold: true
+#| tbl-cap: Summary of the dependent variable 'ImmigSentiment'
+
+RplotterPkg::create_table(
+  x = summary_dt,
+  container_width_px = 500
+)
+```
+
+:::topic
+Plot a histogram of the dependent variable *ImmigSentiment*.
+:::
+
+```{r, warning=FALSE}
+#| code-fold: true
+#| fig-cap: Pro-Immigration Sentiment, European Social Survey, United Kingdom
+
+RplotterPkg::create_histogram_plot(
+  df = data_dt,
+  aes_x = "ImmigSentiment",
+  x_title = "Pro-Immigration Sentiment Value",
+  y_title = "Number of Respondents",
+  binwidth = 1,
+  x_major_breaks = seq(0,30,1),
+  bar_fill = "blue",
+  bar_color = "white",
+  show_minor_grids = F
+)
+```
+
+::: takeaway
+Take Away: There appears to be a heaping of 0's and 30's.
+:::
+
+## The true population mean
+
+> ...central limit theorem says that infinite random samples of any size of a population will produce sample means that follow a normal distribution. 
+
+> ...the inferences we make are less about saying what the “true” population mean is -- it’s more about “ruling out” other alternatives as highly unlikely, given what we know from central limit theorem and the properties of a normal distribution.
+
+Take smaller samples of the population (i.e. group by region) and compare their means to the overall estimate of the population mean of 16.891:
+
+```{r}
+region_sentiment_dt <- data_dt[, .(Mean_Sentiment = round(mean(ImmigSentiment, na.rm = T), 3)), by = Region][order(-Mean_Sentiment)]
+```
+```{r}
+#| code-fold: true
+#| tbl-cap: Immigrant sentiment grouped by region
+
+RplotterPkg::create_table(
+  x = region_sentiment_dt[1:6,],
+  container_width_px = 300
+)
+```
+
+To compare the above regional means, compute the standard error of the estimated overall population mean and its 95% confidence interval.
+
+> This is the interval through which 95% of all possible sample means would fall by chance, given what we know about the normal distribution.
+
+```{r}
+sent_mean <- round(mean(data_dt$ImmigSentiment, na.rm=T), 3)
+sent_sd <- round(sd(data_dt$ImmigSentiment, na.rm=T), 3)
+sent_se <- round(sent_sd/sqrt(nrow(data_dt)), 3)
+sent_se_dt <- data.table(
+  N = nrow(na.omit(data_dt)),
+  Mean = sent_mean,
+  Mean_SE = sent_se,
+  Lower_95 = round(sent_mean - 1.96 * sent_se, 3),
+  Upper_95 = round(sent_mean + 1.96 * sent_se, 3)
+)
+```
+```{r}
+#| code-fold: true
+#| tbl-cap: Standard error of the estimated overall population mean and its 95% confidence interval
+
+RplotterPkg::create_table(
+  x = sent_se_dt,
+  container_width_px = 400
+)
+```
+::: takeaway
+Take Away: As stated by Steve Miller:
+:::
+
+> ...if we took 100 samples of this size (n = 1,454), 95 of those random samples would, on average, have sample means between about 16.577 and 17.205.
+
+If we have a proposed population mean of 14.65, compute the number of standard deviations the proposed mean is from our estimated population mean of 16.891. We can answer this question by computing the z-score which is the difference between the proposed and sample means divided by the standard error of the sample mean.
+
+:::topic
+Compute the z-score of the difference between the proposed and sample means.
+:::
+
+```{r}
+z_sent_dt <- data.table(
+  Sample_Mean = sent_mean,
+  Proposed_Mean = 14.65,
+  Mean_SE = sent_se,
+  z_score = round((sent_mean - 14.65)/sent_se, 3)
+)
+```
+```{r}
+#| code-fold: true
+#| tbl-cap: How Unlikely Was the Proposed Mean
+
+RplotterPkg::create_table(
+  x = z_sent_dt,
+  container_width_px = 400
+)
+```
+
+
+::: takeaway
+Take Away: The proposed mean of 14.65 is about 14 standard errors away from the sample mean.
+:::
+
+> ...we are not saying the true population mean is actually our sample mean. The true population mean in this context is ultimately unknowable, but inference in this context comes not in saying what “is” but in ruling out things as highly unlikely to be true.
+
+## Regression as more inference by "Ruling Things Out"
+
+:::topic
+Set up a regression of immigration sentiment with a linear model.
+:::
+
+$$ImmSentiment_{i} = \beta_{0}+\beta_{1}*Age_{i}+\beta_{2}*Female_{i}+\beta_{3}*Years Ed_{i}+\beta_{4}*Unemployed_{i}+\beta_{5}*HouseholdInc_{i}+\beta_{6}*Ideology_{i}+\epsilon_{i}$$
+
+```{r}
+ols_sent_lst <- RregressPkg::ols_calc(
+  df = data_dt,
+  formula_obj = ImmigSentiment ~ Age + Female + YrsEdu + UnEmploy + HouseIncome + Ideology,
+  na_omit = T
+)
+```
+```{r}
+#| code-fold: true
+#| tbl-cap: ImmigSentiment ~ Age + Female + YrsEdu + UnEmploy + HouseIncome + Ideology
+
+RplotterPkg::create_table(
+  x = ols_sent_lst$coef_df,
+  container_width_px = 500
+)
+```
+
+
+::: takeaway
+Take Away: Higher levels of education coincide with an increase in pro-immigration sentiment -- a positive coefficient and relationship.  Those with an ideology closer to the right have lower levels of pro-immigration sentiment -- a negative coefficient and relationship.
+:::
+
+::: takeaway
+Take Away: As Steve Miller points out, the `(Intercept)` value is totally useless.
+:::
+
+The $R^2$ = `r ols_sent_lst$rsquared`
+
+:::topic
+Refine the regression by standardizing the non-binary predictors.
+:::
+
+```{r}
+r2sd <- function(x, na = T) {
+    return((x - mean(x, na.rm = na)) / (2 * sd(x, na.rm = na)))
+}
+
+data_stand_dt <- data_dt[, .(
+  ImmigSentiment = ImmigSentiment, 
+  Age = r2sd(Age),
+  Female = Female,
+  YrsEdu = r2sd(YrsEdu),
+  UnEmploy = UnEmploy,
+  HouseIncome = r2sd(HouseIncome),
+  Ideology = r2sd(Ideology)
+)]
+
+ols_stand_sent_lst <- RregressPkg::ols_calc(
+  df = data_stand_dt,
+  formula_obj = ImmigSentiment ~ Age + Female + YrsEdu + UnEmploy + HouseIncome + Ideology,
+  na_omit = T
+)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: Coefficients from standardizing the non-binary predictors.
+
+RplotterPkg::create_table(
+  x = ols_stand_sent_lst$coef_df,
+  container_width_px = 500
+)
+```
+
+::: takeaway
+Take Away: As Steve Miller states:
+:::
+
+> When standardized, the 17.269 gives us the estimated value for an employed man of average age, education, income, and ideology. That y-intercept is much more useful the extent to which it conveys a quantity of interest for an observation that is much more likely to actually exist.
+
+> *YrsEdu* has the strongest magnitude effect and the most precise.  *HouseIncome* and *Ideology* look more comparable in the standandized vs unstandandized.
+
+Constant variance for OLS residuals?
+
+:::topic
+Performing the Breusch-Pagan test for Heteroskedasticity.
+:::
+
+```{r}
+bp_test_df <- RregressPkg::ols_BP_test_calc(
+  df = data_stand_dt,
+  formula_obj = ImmigSentiment ~ Age + Female + YrsEdu + UnEmploy + HouseIncome + Ideology
+)
+```
+
+```{r}
+#| code-fold: true
+#| tbl-cap: BP Homoskedasticity Test
+
+RplotterPkg::create_table(
+  x = bp_test_df,
+  container_width_px = 400
+)
+```
+
+The null hypothesis is that homoskedasticity holds and that the variance of the residuals $\mu_{i}$ are constant and uncorrelated with the predictors:
+$$H_{0}: Var(\mu|x_{1}, x_{2}...x_{k}) = \sigma^2$$
+
+::: takeaway
+Take Away: It appears that with the small $p$-values we reject the null of homoscedasticity.  The standard errors reported above may not be reliable and some transformation of the data may be necessary.
+:::
+
+:::topic
+Plot residuals versus fitted values.
+:::
+
+```{r}
+#| code-fold: true
+#| fig-cap: Residuals versus fitted values for the OLS model
+
+resid_fit_dt <- data.table(
+  Fit = ols_stand_sent_lst$fitted_vals,
+  Residuals = ols_stand_sent_lst$residual_vals
+)
+RplotterPkg::create_scatter_plot(
+  df = resid_fit_dt,
+  aes_x = "Fit",
+  aes_y = "Residuals",
+  rot_y_tic_label = T
+)
+```
+
+::: takeaway
+Take Away: The residuals do not appear to be random about zero, but show a definite pattern.
+:::

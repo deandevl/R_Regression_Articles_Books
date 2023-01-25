@@ -1,0 +1,258 @@
+---
+title: "3-MRA_Estimation"
+author: "Rick Dean"
+format:
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: false
+    number-offset: 1
+    self-contained: true
+    smooth-scroll: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 8
+    fig-height: 8
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    minimal: false
+    css: ../../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "The following notes and scripts are based on the following sources:
+[Introductory Econometrics - A Modern Approach](https://www.amazon.com/Introductory-Econometrics-Modern-Approach-Standalone/dp/130527010X/ref=sr_1_2?dchild=1&keywords=Introductory+Econometrics%3A+A+Modern+Approach&qid=1597005903&s=books&sr=1-2)  by Jeffrey M. Wooldridge is the main text for the statistical content. This text will be referenced as `(Wooldridge)`. The companion text [Using R for Introductory Econometrics](http://www.urfie.net/index.html) by Florian Heiss provides specific R scripts in support of the main text and the inspiration for my scripts, notes and graphics. I will reference this document as `(Heiss)`.  The following is from **Part 1 - Regression Analysis with Cross-Sectional Data, Chapter 3 MRA Estimation** of `(Heiss)`."
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(magrittr)
+library(data.table)
+library(wooldridge)
+library(ggplot2)
+library(RregressPkg)
+library(RplotterPkg)
+```
+
+# 3 Multiple Regression Analysis: Estimation
+
+## 3.1 Multiple Regression in Practice
+:::task
+Task: Apply the `stats::lm()` function to determinants of College GPA `(Wooldridge, example 3.1, page 66)`.
+:::
+
+1. Read the data:
+```{r}
+gpa1_dt <- data.table::as.data.table(wooldridge::gpa1) %>%
+.[, .(colGPA, hsGPA, ACT)]
+```
+
+2. Apply `stats::lm()`:
+```{r}
+gpa_model <- stats::lm(formula = colGPA ~ hsGPA + ACT, data = gpa1_dt)
+summary(gpa_model)
+```
+
+:::task
+Task: Apply the `stats::lm()` function to determinants of hourly wage `(Wooldridge, example 3.2, page 67)`.
+:::
+
+1. Read the data:
+```{r}
+wage1_dt <- data.table::as.data.table(wooldridge::wage1) %>%
+.[, .(wage, educ, exper, tenure)]
+```
+
+2. Apply `stats::lm()`:
+```{r}
+wage_model <- stats::lm(formula = log(wage) ~ educ + exper + tenure, data = wage1_dt)
+summary(wage_model)
+```
+:::task
+Task: Repeat the estimate of *wage_model* with just the *educ* variable.
+:::
+```{r}
+wage_model_educ <- stats::lm(formula = log(wage) ~ educ, data = wage1_dt)
+summary(wage_model_educ)
+```
+
+
+:::task
+Task: Apply the `stats::lm()` function to determinants of 401(k) participation rate `(Wooldridge, example 3.3, page 70)`.
+:::
+
+1. Read the data:
+```{r}
+k401k_dt <- data.table::as.data.table(wooldridge::k401k) %>%
+.[, .(prate, mrate, age)]
+```
+
+2. Apply `stats::lm()`:
+```{r}
+k401k_model <- stats::lm(formula = prate ~ mrate + age, data = k401k_dt)
+summary(k401k_model)
+```
+:::task
+Task: Apply the `stats::lm()` function to determinants of arrest `(Wooldridge, example 3.5, page 72)`.
+:::
+
+1. Read the data:
+```{r}
+crime1_dt <- data.table::as.data.table(wooldridge::crime1) %>%
+.[, .(narr86, pcnv, ptime86, qemp86, avgsen)]
+```
+
+2. Apply `stats::lm()`:
+```{r}
+crime_model <- stats::lm(formula = narr86 ~ pcnv + ptime86 + qemp86, data = crime1_dt)
+summary(crime_model)
+```
+:::task
+Task: Repeat the estimate of *crime_model* with *avgsen* (average sentence) variable.
+:::
+```{r}
+crime_model_avgsen <- stats::lm(formula = narr86 ~ pcnv + ptime86 + qemp86 + avgsen, data = crime1_dt)
+summary(crime_model_avgsen)
+```
+
+## 3.2 OLS in Matrix Form
+The derivation of the OLS estimates via matrix operations is presented at `(Wooldridge, Appendix E, page 720)` and has the following form:
+
+<center>$\hat{\beta} = (X^\prime X)^{-1}X^\prime y$<span style="float:right;">[3.2 Heiss page 95]</span></center><br>
+
+The vector of residuals can be manually calculated as:
+
+<center>$\hat\mu = y - X\hat\beta$<span style="float:right;">[3.3 Heiss page 95]</span></center><br>
+
+The estimated variance of the error term $\hat\sigma^2$ is:
+
+<center>$\hat\sigma^2 = \frac{1}{n-k-1}\hat\mu^\prime \hat\mu$<span style="float:right;">[3.4 Heiss page 96]</span></center><br>
+
+The standard error of the regression (SER) is $\hat\sigma = \sqrt{\hat\sigma^2}$
+
+According to `(Wooldridge, Theorem E.2, page 724)` the variance-covariance matrix of the OLS estimators has the matrix form:
+
+<center>$\widehat{Var(\hat\beta)}=\hat\sigma^2(X^\prime X)^{-1}$<span style="float:right;">[3.5 Heiss page 96]</span></center><br>
+
+<div class="task">Task: Using the *gpa1* data apply the above equations [3.2] - [3.5].</div> 
+
+1. Read the data:
+```{r}
+gpa1_dt <- data.table::as.data.table(wooldridge::gpa1) %>%
+.[, .(colGPA,hsGPA,ACT)]
+```
+
+2. Extract k, n, X, Y:
+```{r}
+k <- 2
+n <- nrow(gpa1_dt)
+X <- cbind(1, gpa1_dt$hsGPA, gpa1_dt$ACT)
+Y <- gpa1_dt$colGPA
+head(X)
+```
+
+3. Coefficient estimates (equation [3.2]):
+```{r}
+beta_hat <- solve(t(X)%*%X) %*% t(X) %*% Y
+```
+The coefficients: `r beta_hat`
+
+4. Residuals (equation [3.3]):
+```{r}
+mu_hat <- Y - X %*% beta_hat
+```
+
+5. Variance of the error term (equation [3.4]) and the standard error (SER):
+```{r}
+sigma_hat <- as.numeric(t(mu_hat) %*% mu_hat / (n-k-1))
+SER <- sqrt(sigma_hat)
+```
+Standard error of residuals (SER): `r SER`
+
+6. Estimated variance of coefficients and their standard error (equation [3.5]):
+```{r}
+variance_beta_hat <- sigma_hat * solve(t(X) %*% X)
+coefficient_se <- sqrt(diag(variance_beta_hat))
+```
+Coefficient standard errors: `r coefficient_se`
+
+## 3.3 Ceteris Paribus Interpretation and Omitted Variable Bias
+:::task
+Task: Using the college GPA data `(wooldridge::gpa1)`, repeat the regression of college GPA(*colGPA*) on high school GPA(*hsGPA*) and ACT achivement test(*ACT*).  Study the *ceteris paribus* effect of ACT on college GPA.
+:::
+
+1. Read the data:
+```{r}
+gpa1_dt <- data.table::as.data.table(wooldridge::gpa1) %>%
+.[, .(colGPA, ACT, hsGPA)]
+```
+2. Get the ACT and hsGPA coefficients from the full model:
+```{r}
+gpa_model <- lm(colGPA ~ ACT + hsGPA, data = gpa1_dt)
+ACT_full_coef <- coef(gpa_model)["ACT"]
+hsGPA_full_coef <- coef(gpa_model)["hsGPA"]
+```
+
+ACT full model coefficient: `r ACT_full_coef`
+hsGPA full model coefficient: `r hsGPA_full_coef`
+
+3. Regress ACT on hsGPA and show the ACT coefficient:
+```{r}
+ACT_hsGPA_coef <- coef(lm(hsGPA ~ ACT, data = gpa1_dt))["ACT"]
+```
+
+Coefficient between ACT and hsGPA: `r ACT_hsGPA_coef`
+
+4. Get the ACT coefficient with hsGPA **NOT** being fixed using `(Heiss, Equation 3.8, page 97)`:
+```{r}
+ACT_unfixed_coef <- ACT_full_coef + hsGPA_full_coef * ACT_hsGPA_coef
+```
+
+Coefficient of ACT with hsGPA not fixed: `r ACT_unfixed_coef`
+
+5. Get the ACT coefficient with hsGPA omitted:
+```{r}
+ACT_coef <- coef(lm(colGPA ~ ACT, data = gpa1_dt))["ACT"]
+```
+Coefficient of ACT with hsGPA omitted: `r ACT_coef`
+
+## 3.4 Standard Errors, Multicollinearity, and VIF
+<div class="task">Task: Using the college GPA data `(wooldridge::gpa1)`, manually calculate *hsGPA*'s VIF (variance inflation factor) and its coefficient standard error.</div>  
+
+1. Read the data:
+```{r}
+gpa1_dt <- data.table::as.data.table(wooldridge::gpa1) %>%
+.[, .(colGPA, ACT, hsGPA)]
+```
+
+2. Get the ACT and hsGPA coefficients from the full model:
+```{r}
+gpa_model <- lm(colGPA ~ ACT + hsGPA, data = gpa1_dt)
+(gpa_model_summary <- summary(gpa_model))
+```
+
+3. Extract the standard error of the residual (SER) from the summary:
+```{r}
+SER <- gpa_model_summary$sigma
+```
+
+4. Regress hsGPA on ACT for calculating hsGPA_R2 and hsGPA_VIF:
+```{r}
+hsGPA_ACT_model <- lm(hsGPA ~ ACT, data = gpa1_dt)
+hsGPA_R2 <- summary(hsGPA_ACT_model)$r.squared
+hsGPA_VIF <- 1/(1 - hsGPA_R2)
+```
+
+hsGPA $R^2$ = `r hsGPA_R2`
+
+hsGPA VIF = `r hsGPA_VIF`
+
+5. Using `(Heiss, Equation 3.11, page 99)` manually calculate the *se(hsGPA)*:
+```{r}
+n <- nobs(gpa_model)
+hsGPA_se <- 1/sqrt(n-1) * SER/sd(gpa1_dt$hsGPA) * sqrt(hsGPA_VIF)
+```
+
+The standard error for *hsGPA* is `r hsGPA_se`.
+This is the same value we obtained in the matrix computation of the OLS in section 3.2 above.
