@@ -1,0 +1,703 @@
+---
+title: "Ch2 Matrix Algebra"
+author: "Rick Dean"
+format: 
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: false
+    number-offset: 1
+    self-contained: true
+    smooth-scroll: true
+    code-fold: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 12
+    fig-height: 6
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    css: ../../../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "The following R script are notes from the book [Methods of Multivariate Analysis](https://onlinelibrary.wiley.com/doi/book/10.1002/0471271357) by Alvin C. Rencher."
+---
+
+```{r}
+#| warning: false
+#| message: false
+
+library(RmatrixPkg)
+library(matlib)
+```
+
+:::topic
+Ch2 Matrix Algebra: Problems
+:::
+
+##  2.1 
+```{r}
+A <- rbind(c(4, 2, 3),
+           c(7, 5, 8))
+
+B <- rbind(c(3, -2, 4),
+           c(6, 9, -5))
+```
+
+`r RmatrixPkg::matrix_to_latex(A, bracket_type = "paren", matrix_name = "A")`
+
+`r RmatrixPkg::matrix_to_latex(B, bracket_type = "paren", matrix_name = "B")`
+
+:::topic
+$\textbf{A + B} \qquad  \textbf{A - B}$
+:::
+
+```{r}
+val <- A + B 
+```
+`r RmatrixPkg::matrix_to_latex(val, bracket_type = "paren", matrix_name = "A+B")`
+
+```{r}
+val <- A - B
+```
+`r RmatrixPkg::matrix_to_latex(val, bracket_type = "paren", matrix_name = "A-B")`
+
+:::topic
+$t\textbf{(A)A} \qquad  \textbf{A}t\textbf{(A)}$
+:::
+
+```{r}
+val <- t(A) %*% A
+```
+`r RmatrixPkg::matrix_to_latex(val, bracket_type = "paren", matrix_name = "t(A)A")`
+
+```{r}
+val <- A %*% t(A)
+```
+`r RmatrixPkg::matrix_to_latex(val, bracket_type = "paren", matrix_name = "At(A)")`
+
+## 2.2 
+
+:::topic
+$t(\textbf{A+B}) \qquad t(\textbf{A})+t(\textbf{B}) \qquad t(t(\textbf{A}))$
+:::
+
+```{r}
+val <- t(A + B)
+```
+`r RmatrixPkg::matrix_to_latex(val, bracket_type = "paren", matrix_name = "t(A+B)")`
+
+```{r}
+val <- t(A) + t(B)
+```
+`r RmatrixPkg::matrix_to_latex(val, bracket_type = "paren", matrix_name = "t(A)+t(B)")`
+
+```{r}
+val <- t(t(A))
+```
+`r RmatrixPkg::matrix_to_latex(val, bracket_type = "paren", matrix_name = "t(t(A))")`
+
+## 2.3 
+```{r}
+A <- rbind(c(1, 3),
+           c(2, -1))
+
+B <- rbind(c(2, 0),
+            c(1, 5))
+```
+`r RmatrixPkg::matrix_to_latex(A, bracket_type = "paren", matrix_name = "A")`
+
+`r RmatrixPkg::matrix_to_latex(B, bracket_type = "paren", matrix_name = "B")`
+
+:::topic
+$\textbf{AB} \qquad  \textbf{BA}$
+:::
+
+```{r}
+val <- A %*% B
+```
+`r RmatrixPkg::matrix_to_latex(val, bracket_type = "paren", matrix_name = "AB")`
+
+```{r}
+val <- B %*% A
+```
+`r RmatrixPkg::matrix_to_latex(val, bracket_type = "paren", matrix_name = "BA")`
+
+:::topic
+$det(\textbf{AB}) \qquad  det(\textbf{A})det(\textbf{B})$
+:::
+
+```{r}
+val <- det(A %*% B)
+```
+`r RmatrixPkg::matrix_to_latex(val, bracket_type = "none", matrix_name = "det(AB)")`
+
+```{r}
+val <- det(A) * det(B)
+```
+`r RmatrixPkg::matrix_to_latex(val, bracket_type = "none", matrix_name = "det(A)det(B)")`
+
+## 2.4 
+
+:::topic
+$\textbf{A + B} \qquad  tr(\textbf{A+B})$
+:::
+
+```{r}
+val <- A + B
+```
+`r RmatrixPkg::matrix_to_latex(val, bracket_type = "paren", matrix_name = "A+B")`
+
+```{r}
+val <- RmatrixPkg::tr(A + B)
+```
+`r RmatrixPkg::matrix_to_latex(val, bracket_type = "none", matrix_name = "tr(A+B)")`
+
+:::topic
+$tr(\textbf{A})+tr(\textbf{B})$
+:::
+
+```{r}
+val <- sum(diag(A)) + sum(diag(B))
+```
+`r RmatrixPkg::matrix_to_latex(val, bracket_type = "none", matrix_name = "tr(A)+tr(B)")`
+
+:::topic
+$tr(\textbf{A}) \qquad tr(\textbf{B})$ 
+:::
+
+```{r}
+val_1 <- RmatrixPkg::tr(A)
+val_2 <- RmatrixPkg::tr(B)
+```
+`r RmatrixPkg::matrix_to_latex(val_1, bracket_type = "none", matrix_name = "tr(A)")`
+
+`r RmatrixPkg::matrix_to_latex(val_2, bracket_type = "none", matrix_name = "tr(B)")`
+
+## 2.5 
+```{r}
+A <- rbind(c(1, 2, 3),
+           c(2, -1, 1))
+B <- rbind(c(3, -2),
+           c(2, 0),
+           c(-1, 1))
+```
+
+`r RmatrixPkg::matrix_to_latex(A, bracket_type = "paren", matrix_name = "A")`
+
+`r RmatrixPkg::matrix_to_latex(B, bracket_type = "paren", matrix_name = "B")`
+
+:::topic
+$\textbf{AB} \qquad  \textbf{BA}$
+:::
+
+```{r}
+val_1 <- A %*% B
+val_2 <- B %*% A
+```
+
+
+`r RmatrixPkg::matrix_to_latex(val_1, bracket_type = "paren", matrix_name = "AB")`
+
+`r RmatrixPkg::matrix_to_latex(val_2, bracket_type = "paren", matrix_name = "BA")`
+
+:::topic
+$tr(\textbf{AB}) \qquad tr(\textbf{BA})$
+:::
+
+```{r}
+val_1 <- RmatrixPkg::tr(A %*% B)
+val_2 <- RmatrixPkg::tr(B %*% A)
+```
+
+`r RmatrixPkg::matrix_to_latex(val_1, bracket_type = "none", matrix_name = "tr(AB)")`
+
+`r RmatrixPkg::matrix_to_latex(val_2, bracket_type = "none", matrix_name = "tr(BA)")`
+
+## 2.6
+```{r}
+A <- rbind(c(1, 2, 3),
+           c(2, 4, 6),
+           c(5, 10, 15))
+B <- rbind(c(-1, 1, -2),
+           c(-1, 1, -2),
+           c(1, -1, 2))
+```
+`r RmatrixPkg::matrix_to_latex(A, bracket_type = "paren", matrix_name = "A")`
+
+`r RmatrixPkg::matrix_to_latex(B, bracket_type = "paren", matrix_name = "B")`
+
+:::topic
+Show that $\textbf{AB = 0}$
+:::
+
+```{r}
+val <- A %*% B
+```
+`r RmatrixPkg::matrix_to_latex(val, bracket_type = "paren", matrix_name = "AB")`
+
+:::topic
+Find vector $\textbf{x}$ such that $\textbf{Ax = 0}$
+:::
+
+Solve using *matlib::Solve()*
+```{r}
+b <- c(0,0,0)
+matlib::showEqn(A,b)
+```
+```{r}
+matlib::Solve(A, b, verbose = T)
+```
+:::takeaway
+Take Away: So a solution is x1 = 1, x2 = 1, x3 = -1. There is not a unique solution but infinitely many solutions.
+:::
+
+:::topic
+Show that $\textbf{|A|}$ = 0
+:::
+
+```{r}
+A_det <- det(A)
+```
+$\textbf{|A|}$ = `r A_det`
+
+## 2.7
+```{r}
+A <- rbind(c(1, -1, 4),
+           c(-1, 1, 3),
+           c(4, 3, 2))
+B <- rbind(c(3, -2, 4),
+           c(7, 1, 0),
+           c(2, 3, 5))
+x <- cbind(c(1, -1, 2))
+y <- cbind(c(3,2,1))
+```
+
+`r RmatrixPkg::matrix_to_latex(A, bracket_type = "paren", matrix_name = "A")`
+
+`r RmatrixPkg::matrix_to_latex(B, bracket_type = "paren", matrix_name = "B")`
+
+`r RmatrixPkg::matrix_to_latex(x, bracket_type = "paren", matrix_name = "x")`
+
+`r RmatrixPkg::matrix_to_latex(y, bracket_type = "paren", matrix_name = "y")`
+
+:::topic
+$\textbf{Bx} \qquad  t(\textbf{y})\textbf{B}$
+:::
+
+```{r}
+val_1 <- B %*% x 
+val_2 <- t(y) %*% B
+```
+`r RmatrixPkg::matrix_to_latex(val_1, bracket_type = "paren", matrix_name = "Bx")`
+
+`r RmatrixPkg::matrix_to_latex(val_2, bracket_type = "paren", matrix_name = "t(y)B")`
+
+:::topic
+$t(\textbf{x})\textbf{Ax} \qquad t(\textbf{x})\textbf{Ay}$ 
+:::
+
+```{r}
+val_1 <- drop(t(x) %*% A %*% x)
+val_2 <- drop(t(x) %*% A %*% y)
+```
+$t(\textbf{x})\textbf{Ax}$ = `r val_1`
+
+$t(\textbf{x})\textbf{Ay}$ = `r val_2`
+
+:::topic
+$t(\textbf{x})\textbf{x} \qquad  t(\textbf{x})\textbf{y}$
+:::
+
+```{r}
+val_1 <- t(x) %*% x 
+val_2 <- drop(t(x) %*% y)
+```
+$t(\textbf{x})\textbf{x}$ = `r val_1`
+
+$t(\textbf{x})\textbf{y}$ = `r val_2`
+
+:::topic
+$\textbf{x}t(\textbf{x}) \qquad \textbf{x}t(\textbf{y})$
+:::
+
+```{r}
+val_1 <- x %*% t(x) 
+val_2 <- x %*% t(y) 
+```
+`r RmatrixPkg::matrix_to_latex(val_1, bracket_type = "paren", matrix_name = "xt(x)")`
+
+`r RmatrixPkg::matrix_to_latex(val_2, bracket_type = "paren", matrix_name = "xt(y)")`
+
+:::topic
+$t(\textbf{B})\textbf{B}$
+:::
+
+```{r}
+val <- t(B) %*% B 
+```
+`r RmatrixPkg::matrix_to_latex(val, bracket_type = "paren", matrix_name = "t(B)B")`
+
+## 2.8
+
+:::topic
+$\textbf{x + y} \qquad \textbf{x - y}$
+:::
+
+```{r}
+val <- x + y
+```
+`r RmatrixPkg::matrix_to_latex(val, bracket_type = "paren", matrix_name = "x + y")`
+
+```{r}
+val <- x - y
+```
+`r RmatrixPkg::matrix_to_latex(val, bracket_type = "paren", matrix_name = "x - y")`
+
+:::topic
+$t(\textbf{x - y})\textbf{A}(\textbf{x - y})$
+:::
+
+```{r}
+val <- drop(t(x - y) %*% A %*% (x - y))
+```
+$t(\textbf{x - y})\textbf{A}(\textbf{x - y})$ = `r val`
+
+## 2.9 Find $\textbf{Bx}$ as a linear combination of columns of $\textbf{B}$
+```{r}
+b1 <- rbind(3,7,2)
+b2 <- rbind(-2,1,3)
+b3 <- rbind(4,0,5)
+val <- b1 * 1 + b2 * -1 + b3 * 2
+```
+$\textbf{b}_{1}x_{1} + \textbf{b}_{2}x_{2} + \textbf{b}_{3}x_{3}$  = `r RmatrixPkg::matrix_to_latex(val, bracket_type = "paren", matrix_name = "Bx")`
+
+## 2.10
+```{r}
+A <- rbind(c(2,1), 
+           c(1,3))
+B <- rbind(c(1,5), 
+           c(4,0))
+I <- rbind(c(1,0),
+           c(0,1))
+```
+`r RmatrixPkg::matrix_to_latex(A, bracket_type = "paren", matrix_name = "A")`
+
+`r RmatrixPkg::matrix_to_latex(B, bracket_type = "paren", matrix_name = "B")`
+
+`r RmatrixPkg::matrix_to_latex(I, bracket_type = "paren", matrix_name = "I")`
+
+:::topic
+Show $t(\textbf{AB}) = t(\textbf{B})t(\textbf{A})$
+:::
+
+```{r}
+val_1 <- t(A %*% B)
+val_2 <- t(B) %*% t(A)
+```
+
+`r RmatrixPkg::matrix_to_latex(val_1, bracket_type = "paren", matrix_name = "t(AB)")`
+
+`r RmatrixPkg::matrix_to_latex(val_2, bracket_type = "paren", matrix_name = "t(B)t(A)")`
+
+:::topic
+Show $\textbf{AI} = \textbf{A} \qquad  \textbf{IB} = \textbf{B}$
+:::
+
+```{r}
+val_1 <- A %*% I
+val_2 <- I %*% B
+```
+
+`r RmatrixPkg::matrix_to_latex(val_1, bracket_type = "paren", matrix_name = "AI")`
+
+`r RmatrixPkg::matrix_to_latex(val_2, bracket_type = "paren", matrix_name = "IB")`
+
+:::topic
+Find $|\textbf{A}|$
+:::
+
+```{r}
+val <- det(A)
+```
+The determinent of $\textbf{A}$ is `r val`
+
+
+## 2.11 
+```{r}
+a <- cbind(c(1,-3,2))
+b <- cbind(c(2,1,3))
+```
+
+`r RmatrixPkg::matrix_to_latex(a, bracket_type = "paren", matrix_name = "a")`
+
+`r RmatrixPkg::matrix_to_latex(b, bracket_type = "paren", matrix_name = "b")`
+
+:::topic
+$t(\textbf{a})\textbf{b} \qquad (t(\textbf{a})\textbf{b})^2$
+:::
+
+```{r}
+val_1 <- drop(t(a) %*% b)
+val_2 <- (t(a) %*% b)^2
+```
+$t(\textbf{a})\textbf{b}$ = `r val_1`
+
+$(t(\textbf{a})\textbf{b})^2$ = `r val_2`
+
+:::topic
+$\textbf{b}t(\textbf{b}) \qquad t(\textbf{a})(\textbf{b}t(\textbf{b}))\textbf{a}$
+:::
+```{r}
+val_1 <- b %*% t(b)
+val_2 <- drop(t(a) %*% (b %*% t(b)) %*% a)
+```
+`r RmatrixPkg::matrix_to_latex(val_1, bracket_type = "paren", matrix_name = "bt(b)")`
+
+$t(\textbf{a})(\textbf{b}t(\textbf{b}))\textbf{a}$ = `r val_2`
+
+:::topic
+$(t(\textbf{a})\textbf{b})^2 \qquad t(\textbf{a})(\textbf{b}t(\textbf{b}))\textbf{a}$
+:::
+```{r}
+val_1 <-  drop((t(a) %*% b)^2)
+val_2 <- drop(t(a) %*% (b %*% t(b)) %*% a)
+```
+$(t(\textbf{a})\textbf{b})^2$ = `r val_1`
+
+$t(\textbf{a})(\textbf{b}t(\textbf{b}))\textbf{a}$ = `r val_2`
+
+## 2.12 
+
+:::topic
+Find $\textbf{DA} \qquad \textbf{AD} \qquad \textbf{DAD}$
+:::
+
+```{r}
+A <- rbind(c(1,2,3),
+           c(4,5,6),
+           c(7,8,9))
+D <- rbind(c("a",0,0),
+           c(0,"b",0),
+           c(0,0,"c"))
+```
+`r RmatrixPkg::matrix_to_latex(A, bracket_type = "paren", matrix_name = "A")`
+
+`r RmatrixPkg::matrix_to_latex(D, bracket_type = "paren", matrix_name = "D")`
+```{r}
+DA <- rbind(c("a","2a","3a"),
+            c("4b","5b","6b"),
+            c("7c","8c","9c"))
+AD <- rbind(c("a","2b","3c"),
+            c("4a","5b","6c"),
+            c("7a","8b","9c"))
+DAD <- rbind(c("a^2","2ab","3ac"),
+             c("4ba","5b^2","6bc"),
+             c("7ca","8cb","9c^2"))
+```
+`r RmatrixPkg::matrix_to_latex(DA, bracket_type = "paren", matrix_name = "DA")`
+
+`r RmatrixPkg::matrix_to_latex(AD, bracket_type = "paren", matrix_name = "AD")`
+
+`r RmatrixPkg::matrix_to_latex(DAD, bracket_type = "paren", matrix_name = "DAD")`
+
+## 2.13 
+
+:::topic
+Find $\textbf{AB}$ using the indicated partitioning at (2.65)
+:::
+
+```{r}
+A11 <- rbind(c(2,1),
+             c(3,2))
+A12 <- cbind(c(2,0))
+A21 <- rbind(c(1,0))
+A22 <- cbind(c(1))
+
+B11 <- rbind(c(1,1,1),
+             c(2,1,1))
+B12 <- cbind(c(0,2))
+B21 <- rbind(c(2,3,1))
+B22 <- cbind(c(2))
+
+AB11 <- A11 %*% B11 + A12 %*% B21
+AB12 <- A11 %*% B12 + A12 %*% B22
+AB21 <- A21 %*% B11 + A22 %*% B21
+AB22 <- A21 %*% B12 + A22 %*% B22
+
+AB <- cbind(AB11,AB12)
+AB <- rbind(AB, cbind(AB21, AB22))
+```
+`r RmatrixPkg::matrix_to_latex(AB, bracket_type = "paren", matrix_name = "AB")`
+
+:::topic
+Check $\textbf{AB}$ in usual way ignoring partitining
+:::
+
+```{r}
+A <- rbind(c(2,1,2),
+           c(3,2,0),
+           c(1,0,1))
+B <- rbind(c(1,1,1,0),
+           c(2,1,1,2),
+           c(2,3,1,2))
+AB <- A %*% B
+```
+`r RmatrixPkg::matrix_to_latex(AB, bracket_type = "paren", matrix_name = "AB")`
+
+## 2.14
+```{r}
+A <- rbind(c(1,3,2),
+           c(2,0,-1))
+B <- rbind(c(1,2),
+           c(0,1),
+           c(1,0))
+C <- rbind(c(2,1,1),
+           c(5,-6,-4))
+```
+`r RmatrixPkg::matrix_to_latex(A, bracket_type = "paren", matrix_name = "A")`
+
+`r RmatrixPkg::matrix_to_latex(B, bracket_type = "paren", matrix_name = "B")`
+
+`r RmatrixPkg::matrix_to_latex(C, bracket_type = "paren", matrix_name = "C")`
+
+:::topic
+Find $\textbf{AB}$ and $\textbf{CB}$
+:::
+
+```{r}
+AB <- A %*% B
+CB <- C %*% B
+```
+`r RmatrixPkg::matrix_to_latex(AB, bracket_type = "paren", matrix_name = "AB")` 
+
+`r RmatrixPkg::matrix_to_latex(CB, bracket_type = "paren", matrix_name = "CB")`
+
+:::topic
+ Find the rank of $\textbf{A} \qquad \textbf{B} \qquad \textbf{C}$
+:::
+
+```{r}
+A_rank <- base::qr(A)$rank
+B_rank <- base::qr(B)$rank
+C_rank <- base::qr(C)$rank
+```
+
+Rank A = `r A_rank`
+Rank B = `r B_rank`
+Rank C = `r C_rank`
+
+## 2.15
+```{r}
+A <- rbind(c(5,4,4),
+           c(2,-3,1),
+           c(3,7,2))
+B <- rbind(c(1,0,1),
+           c(0,1,0),
+           c(1,2,3))
+```
+`r RmatrixPkg::matrix_to_latex(A, bracket_type = "paren", matrix_name = "A")`
+
+`r RmatrixPkg::matrix_to_latex(B, bracket_type = "paren", matrix_name = "B")`
+
+:::topic
+Find $tr(\textbf{A}) \qquad tr(\textbf{B})$
+:::
+
+$tr(\textbf{A})$ = `r RmatrixPkg::tr(A)`
+
+$tr(\textbf{B})$ = `r RmatrixPkg::tr(B)`
+
+## 2.16 
+```{r}
+A <- rbind(c(3, 4, 3),
+           c(4, 8, 6),
+           c(3, 6, 9))
+```
+`r RmatrixPkg::matrix_to_latex(A, bracket_type = "paren", matrix_name = "A")`
+
+:::topic
+Show that $|\textbf{A}| > 0$
+:::
+
+```{r}
+A_det <- det(A)
+```
+$|\textbf{A}| = $ `r A_det`
+
+:::topic
+Find an upper triangular matrix $\textbf{T}$ such that $\textbf{A} = t(\textbf{T})\textbf{T}$
+:::
+
+```{r}
+T <- base::chol(A)
+```
+`r RmatrixPkg::matrix_to_latex(T, bracket_type = "paren", matrix_name = "T")`
+
+```{r}
+TT <- t(T) %*% T
+```
+
+$t(\textbf{T})\textbf{T} = $ `r TT`
+
+## 2.18 
+```{r}
+A <- rbind(c(1, -1, 1),
+           c(2, 1, 0),
+           c(1, -1, -1))
+```
+`r RmatrixPkg::matrix_to_latex(A, bracket_type = "paren", matrix_name = "A")`
+
+:::topic
+Normalize the columns of A by dividing each column by its length.
+:::
+```{r}
+A_length <- sqrt(t(A) %*% A)
+A_normal <- A/diag(A_length)
+```
+
+```{r}
+ans <- apply(A, 2, function(x){return(x/sum(x))})
+```
+```{r}
+A <- rbind(c(1,1,1),
+           c(1,1,-1),
+           c(1,-2,0))
+A_length <- sqrt(t(A) %*% A)
+C <- t(t(A)/diag(A_length))
+```
+
+A normalized 
+`r RmatrixPkg::matrix_to_latex(C, bracket_type = "paren", matrix_name = "C")`
+
+```{r}
+CC <- t(C) %*% C
+```
+
+`r RmatrixPkg::matrix_to_latex(CC, bracket_type = "paren", matrix_name = "t(C)C")`
+
+## 2.19 
+
+```{r}
+A <- rbind(c(1, 1, -2),
+           c(-1, 2, 1),
+           c(0, 1, -1))
+```
+
+`r RmatrixPkg::matrix_to_latex(A, bracket_type = "paren", matrix_name = "A")`
+
+:::topic
+Find the eigenvalues and associated normalized eigenvectors.
+:::
+
+```{r}
+A_eigen <- base::eigen(A)
+```
+
+Eigenvectors `r RmatrixPkg::matrix_to_latex(A_eigen$vectors, bracket_type = "paren", matrix_name = "")`
+
+Eigenvalues `r RmatrixPkg::matrix_to_latex(A_eigen$values, bracket_type = "paren", matrix_name = "")`
+
+

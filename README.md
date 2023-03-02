@@ -1,29 +1,47 @@
-## **R_Regression_Analysis_Books**
+## **R_Regression_Articles_Books**
 
-The repository contains notes/scripts/inspiration from the following articles/books:
+The repository contains various notes/scripts/inspiration related to regression in R.
 
-1. [What Do We Know About British Attitudes Toward Immigration? A Pedagogical Exercise of Sample Inference and Regression](http://svmiller.com/blog/2020/03/what-explains-british-attitudes-toward-immigration-a-pedagogical-example/) by Steve Miller
+#### Folder "Miller" contains the following articles by [Steve Miller](http://svmiller.com/blog/):
 
-2. [Introductory Econometrics - A Modern Approach](https://www.amazon.com/Introductory-Econometrics-Modern-Approach-Standalone/dp/130527010X/ref=sr_1_2?dchild=1&keywords=Introductory+Econometrics%3A+A+Modern+Approach&qid=1597005903&s=books&sr=1-2)  by Jeffrey M. Wooldridge
+[What Do We Know About British Attitudes Toward Immigration? A Pedagogical Exercise of Sample Inference and Regression](http://svmiller.com/blog/2020/03/what-explains-british-attitudes-toward-immigration-a-pedagogical-example/) 
 
-3. [The Normal Distribution, Central Limit Theorem, and Inference from a Sample](http://svmiller.com/blog/2020/03/normal-distribution-central-limit-theorem-inference/) by Steve Miller
+[Bootstrap Your Standard Errors in R](http://svmiller.com/blog/2020/03/bootstrap-standard-errors-in-r/) 
 
-4. [Applied Predictive Modeling](http://appliedpredictivemodeling.com/) by Max Kuhn and Kjell Johnson.
+[Illustrate Some Correlation Limitations and Fallacies in R](http://svmiller.com/blog/2020/01/illustrate-correlation-fallacies-limitations-in-r/)
 
-5. [Can You Beat MLB Recods?](https://joshuacook.netlify.app/post/riddler-beat-mlb-records/) by Joshua Cook
+[How to Make the Most of Regression: Standardization and Post-Estimation Simulation](http://svmiller.com/blog/2020/04/post-estimation-simulation-trump-vote-midwest/) 
 
-6. [An Algebraic View of Multiple Regression](https://dasilvaa10.github.io/b1/) by [Alex daSilva](https://dasilvaa10.github.io/)
+[The Normal Distribution, Central Limit Theorem, and Inference from a Sample](http://svmiller.com/blog/2020/03/normal-distribution-central-limit-theorem-inference/) 
 
-7. [PennState-Stat 501 Regression Methods](https://online.stat.psu.edu/stat501/lesson/welcome-stat-501)  Selected sections from this online course
+#### Books:
 
-8. [Bootstrap Your Standard Errors in R](http://svmiller.com/blog/2020/03/bootstrap-standard-errors-in-r/) by Steve Miller
+[Applied Predictive Modeling](http://appliedpredictivemodeling.com/) by Max Kuhn and Kjell Johnson.
 
-9. [Testing the Equality of Regression Coefficients](https://shouldbewriting.netlify.app/posts/2021-02-16-testing-coefficients-equality/) by  Mattan S. Ben-Shachar
+[Data Analysis Using Regression and Multilevel-Hierarchical Models](http://www.stat.columbia.edu/~gelman/arm/) by Gelman, Hill
 
-10. [Illustrate Some Correlation Limitations and Fallacies in R](http://svmiller.com/blog/2020/01/illustrate-correlation-fallacies-limitations-in-r/) by Steve Miller
+[Generalized Additive Models, An Introduction with R, Second Edition](https://www.routledge.com/Generalized-Add-itive-Models-An-Introduction-with-R-Second-Edition/Wood/p/book/9781498728331) by Simon N. Wood
 
-11. [How to Make the Most of Regression: Standardization and Post-Estimation Simulation](http://svmiller.com/blog/2020/04/post-estimation-simulation-trump-vote-midwest/) by Steve Miller
+[Introductory Econometrics - A Modern Approach](https://www.amazon.com/Introductory-Econometrics-Modern-Approach-Standalone/dp/130527010X/ref=sr_1_2?dchild=1&keywords=Introductory+Econometrics%3A+A+Modern+Approach&qid=1597005903&s=books&sr=1-2)  by Jeffrey M. Wooldridge
 
-12. [Methods of Multivariate Analysis](https://www.wiley.com/en-us/Methods+of+Multivariate+Analysis%2C+2nd+Edition-p-9780471461722) 2nd Edition by Alvin C. Rencher
+[Methods of Multivariate Analysis](https://www.amazon.com/Methods-Multivariate-Analysis-Alvin-Rencher/dp/0470178965) by Alvin C. Rencher and  William F. Christensen        	 
 
-    ​    
+[An Algebraic View of Multiple Regression](https://dasilvaa10.github.io/b1/) by [Alex daSilva](https://dasilvaa10.github.io/)
+
+[Methods of Multivariate Analysis](https://www.wiley.com/en-us/Methods+of+Multivariate+Analysis%2C+2nd+Edition-p-9780471461722) 2nd Edition by Alvin C. Rencher
+
+[The Effect: An Introduction to Research Design and Causality](https://theeffectbook.net/introduction.html) by Nick Huntington-Klein
+
+#### Articles:
+
+[Generalised additive models (GAMs): an introduction](http://environmentalcomputing.net/intro-to-gams/) by Mitchell Lyons
+
+[Making a Covariance Matrix in R](https://stats.seandolinar.com/making-a-covariance-matrix-in-r/) by seandolinar(GitHub)
+
+[Can You Beat MLB Recods?](https://joshuacook.netlify.app/post/riddler-beat-mlb-records/) by Joshua Cook
+
+#### Courses:
+
+[PennState-Stat 501 Regression Methods](https://online.stat.psu.edu/stat501/lesson/welcome-stat-501)  Selected sections from this online course
+
+[GAMS in R](https://github.com/noamross/gams-in-r-course) by Noam Ross

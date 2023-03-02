@@ -1,0 +1,229 @@
+---
+title: "GAMS: An Introduction"
+author: "Rick Dean"
+date: "12/15/2019"
+output: 
+  html_document:
+    toc: yes
+    toc_depth: 3
+    css: style.css
+---
+
+```{r, message = FALSE, warning = FALSE}
+library(ggplot2)
+library(mgcv)
+library(dplyr)
+library(magrittr)
+library(RplotterPkg)
+library(RregressPkg)
+library(here)
+```
+
+```{r,setup, include=FALSE, eval=TRUE}
+options(knitr.table.format = "html")
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 10, fig.height = 6)
+```
+
+Notes and completed tasks from the article [Generalised additive models (GAMs): an introduction](http://environmentalcomputing.net/intro-to-gams/) by Mitchell Lyons.
+
+# Two sets of data to be modeled by GAM
+
+## A simple example
+
+<div class="task">Task: Create some sin wave shaped random data.</div>
+
+```{r}
+set.seed(2)
+x <- seq(0, pi * 2, 0.1)
+sin_x <- sin(x)
+y <- sin_x + rnorm(n = length(x), mean = 0, sd = sd(sin_x/2))
+sample_data_df <- data.frame(
+  x = x,
+  y = y
+)
+```
+<div class="task">Task:  Plot the data.</div>
+
+```{r, fig.width = 10, fig.height = 8}
+RplotterPkg::create_scatter_plot(
+  df = sample_data_df,
+  aes_x = "x",
+  aes_y = "y",
+  title = "Sample Data",
+  subtitle = "sin wave shaped"
+)
+```
+<div class="task">Task: From the *mgcv::* package create a GAM model of the data. </div>
+
+```{r}
+gam_model <- mgcv::gam(y ~ s(x), method = "REML", data = sample_data_df)
+```
+
+<div class="task">Task: View the summary of the GAM model. </div>
+
+```{r}
+summary(gam_model)
+```
+
+<div class="task">Task: Check the fitted model over the data.</div>
+
+```{r, fig.width = 12, fig.height = 8}
+xy_plots <- RregressPkg::plot_xy_fit(
+  x = gam_model$model$x,
+  y = gam_model$model$y,
+  fit = gam_model$fitted.values,
+  x_title = "X",
+  y_title = "Y",
+  col_width = 6,
+  row_height = 8
+)
+```
+
+<div class="task">Task: From the GAM model obtain the basis function values that correspond to the data. </div>
+
+```{r}
+model_basis_data <- mgcv::predict.gam(gam_model, type = "lpmatrix")
+```
+
+<div class="task">Task: Multiply the GAM model's coefficients by the *model_basis_data* to compute and plot the fitted values.</div>
+
+1. Obtain the coefficients and multiply with *model_basis_data*:
+
+```{r}
+model_coef <- gam_model$coefficients
+fitted_data <- model_basis_data %*% model_coef
+```
+
+2. Plot *fitted_data*:
+
+```{r, fig.width = 10, fig.height = 8}
+fit_df <- data.frame(
+  x = gam_model$model$x,
+  y = fitted_data
+)
+ggplot2::ggplot(data = fit_df, aes(x = x, y = y)) +
+  geom_line()
+```
+
+<div class="task">Task: Plot the GAM model smooth component using `mgcv::plot_gam()` function.</div>  
+```{r}
+mgcv::plot.gam(x = gam_model, rug = FALSE)
+```
+<div class="task">Task: Plot the smooth component using `RgamPkg::plot_gam_1d()` function.</div>  
+```{r,fig.width=8,fig.height=8}
+RgamPkg::plot_gam_1d(
+  gam_model = gam_model, 
+  title = "Simple GAM Model",
+  subtitle = "mgcv::gam(y ~ s(x))",
+  col_width = 8,
+  row_height = 6
+)
+```
+
+
+<div class="task">Task: Plot the individual spline functions of the "x" smooth using the `RgamPkg::plot_basis_splines_1d()` function.</div>
+```{r, fig.width=12, fig.height=8}
+RgamPkg::plot_basis_splines_1d(
+  gam_model = gam_model,
+  data_var = "x",
+  title = 'Spline Functions for "x" Smooth Component',
+  y_limits = c(-1.5, 1.5),
+  y_major_breaks = seq(-1.5, 1.5, 0.5)
+)
+```
+
+
+
+## A quick real example
+
+<div class="task">Task: Read in the CO2 data from Manua Loa.</div>  
+
+```{r}
+data_file <- here("Generalized additive models-an introduction/manua_loa_co2.csv")
+co2_df <- read.csv(data_file)
+```
+
+<div class="task">Task: Convert the *Date* variable and plot the data.</div>  
+
+```{r, fig.width=10, fig.height=8}
+co2_df <- co2_df %>%
+  mutate(Time = as.integer(as.Date(Date, format = "%d/%m/%Y")))
+
+RplotterPkg::create_scatter_plot(
+  df = co2_df,
+  aes_x = "Time",
+  aes_y = "co2",
+  title = "Manua Loa CO2 Data",
+  show_pts = FALSE,
+  connect = TRUE,
+  rot_y_tic_label = TRUE
+)
+```
+
+<div class="task">Task: Fit a simple GAM model with a single smooth term for *Time*.</div>  
+
+```{r}
+co2_time_gam <- mgcv::gam(co2 ~ s(Time), data = co2_df, method = "REML")
+```
+
+<div class="task">Task: Get a summary of the GAM model *co2_time_gam*.</div>  
+```{r}
+summary(co2_time_gam)
+```
+
+
+<div class="task">Task: Plot the fitted model over the data.</div>
+
+```{r, fig.width = 12, fig.height = 8}
+xy_co2_plots <- RregressPkg::plot_xy_fit(
+  x = co2_df$Time,
+  y = co2_df$co2,
+  fit = co2_time_gam$fitted.values,
+  x_title = "Time",
+  y_title = "CO2",
+  display_plot = FALSE
+)
+xy_co2_plots$x_y_fit_plot
+```
+
+<div class="task">Task: Plot CO2 vs the fitted values.</div>  
+
+```{r, fig.width = 12, fig.height = 8}
+xy_co2_plots$y_fit_plot
+```
+
+<div class="task">Task: Plot the GAM model.</div>  
+```{r, fig.width = 12, fig.height = 8}
+RgamPkg::plot_gam_1d(
+  gam_model = co2_time_gam,
+  col_width = 10,
+  row_height = 6
+)
+```
+
+<div class="task">Task: Plot the model using the `mgcv::plot.gam()` function.</div>  
+```{r}
+mgcv::plot.gam(co2_time_gam, rug = FALSE)
+```
+
+
+<div class="task">Task: Create a GAM model with a cyclical smooth term.</div>  
+
+```{r}
+co2_time_season_gam <- mgcv::gam(co2 ~ s(month, bs = "cc", k = 12) + s(Time), data = co2_df, method = "REML")
+summary(co2_time_season_gam)
+```
+<div class="task">Task: Plot the *co2_time_season_gam* model. </div>  
+```{r}
+mgcv::plot.gam(co2_time_season_gam, pages = 1, rug = FALSE)
+```
+
+```{r,fig.width=12, fig.height=8}
+x_major_breaks <- list(
+  month = seq(1, 12, 1)
+)
+RgamPkg::plot_gam_1d(
+  gam_model = co2_time_season_gam,
+  x_major_breaks = x_major_breaks
+)
+```
