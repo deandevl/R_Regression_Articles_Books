@@ -1,0 +1,266 @@
+---
+title: "An Algebraic View of Multiple Regression"
+author: "Rick Dean"
+format: 
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: false
+    number-offset: 0
+    self-contained: true
+    smooth-scroll: true
+    code-fold: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 12
+    fig-height: 6
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    css: ../../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "The following are R scripts/notes on the article [An Algebraic View of Multiple Regression](https://dasilvaa10.github.io/b1/) by [Alex daSilva](https://dasilvaa10.github.io/)."
+---
+
+
+::: topic
+Load the Required R Packages:
+:::
+
+```{r}
+#| warning: false
+#| message: false
+
+library(data.table)
+library(ggplot2)
+library(purrr)
+library(gt)
+library(magrittr)
+library(RplotterPkg)
+library(RregressPkg)
+```
+
+## Time to dive in!
+
+:::topic
+Start with the data package "mtcars" and its three variables *mpg*, *hp*, and *disp*.
+:::
+```{r}
+#| fig-cap: "Scatterplots of mtcars variable pairs"
+#| fig-height: 8
+
+mtcars_dt <- data.table::as.data.table(mtcars) %>% 
+  .[, .(hp, disp, mpg)]
+
+RregressPkg::plot_pairs(
+  df = mtcars_dt,
+  var_name_scaling = list(
+    hp = NULL,
+    disp = NULL,
+    mpg = NULL
+  ),
+  axis_text_sz = 12,
+  rot_y_tic_label = T,
+  plot_dim = 20
+)
+```
+
+:::topic
+Show the summary of the linear model *mpg ~ hp + disp*.
+:::
+```{r}
+mpg_formula_obj <- lm(mpg ~ hp + disp, data = mtcars)
+summary(mpg_formula_obj)
+```
+Our goal is to recreate the *lm* model.
+
+:::topic
+Partition off our response and predictor variables into separate matrices.
+:::
+```{r}
+y_mt <- as.matrix(mtcars[, "mpg"])
+x_mt <- data.table(
+  x0 = rep(1,nrow(mtcars_dt)),
+  hp = mtcars_dt$hp,
+  disp = mtcars_dt$disp
+) %>% 
+  as.matrix(.)
+head(x_mt)
+```
+
+The above *x_mt* matrix is sometimes referred to as the **design matrix** which currently consist of two predictor variables and an intercept variable.
+
+## Now, the fun begins
+
+:::topic
+Finding our beta coefficients.
+:::
+
+In order to do this, we need to find $(X^{T}X)^{-1}$ and multiple by $X^{T}Y$
+```{r}
+XtX_mt <- t(x_mt) %*% x_mt
+XtY_mt <- t(x_mt) %*% y_mt
+```
+
+*XtX_mt* has the sum of the squared values along the diagonal, and cross-products on the off diagonal of the predictors.
+
+*XtY_mt* has the cross-products of the predictors with the response variable.
+
+:::topic
+Back to betas
+:::
+
+As mentioned above $b = (X^{T}X)^{-1}X^{T}Y$.
+```{r}
+betas_mt <- solve(XtX_mt) %*% XtY_mt
+```
+
+## Put a hat on it
+
+:::topic
+Compute the hat matrix (also known as the projection or influence matrix).
+:::
+
+The hat matrix allows us to map $y$ into $\hat{y}$. The hat matrix formula:
+$$H = X(X^{T}X)^{-1}X^{T}$$
+> Once we have calculated the hat matrix, we multiply it by $y$ to find our predicted values.
+
+```{r}
+#| fig-cap: "Our predicted vs lm predicted"
+
+h_mt = x_mt %*% solve(XtX_mt) %*% t(x_mt)
+predicted_mt <- h_mt %*% y_mt
+
+dt <- data.table(
+  x = predicted_mt[,1],
+  y = mpg_formula_obj$fitted.values
+)
+
+RplotterPkg::create_scatter_plot(
+  df = dt,
+  aes_x = "x",
+  aes_y = "y",
+  x_title = "Our Predicted",
+  y_title = "lm Predicted",
+  rot_y_tic_label = T
+)
+```
+
+:::topic
+Compute the residuals and compare with residuals from the *lm*.
+:::
+```{r}
+#| fig-cap: "Our residuals vs lm residuals"
+
+residuals_mt <- y_mt - predicted_mt
+
+dt <- data.table(
+  x = residuals_mt[,1],
+  y = mpg_formula_obj$residuals
+)
+
+RplotterPkg::create_scatter_plot(
+  df = dt,
+  aes_x = "x",
+  aes_y = "y",
+  x_title = "Our Residuals",
+  y_title = "lm Residuals",
+  rot_y_tic_label = T
+)
+```
+
+## An Estimate of Error
+
+> We can use the residuals we've calculated to help us find the standard errors of our beta estimates.
+
+$$var(\hat{B}) = \sigma^{2}(X^{T}X)^{-1}$$
+The above formula gives us the variance/co-variance among the betas.  The square root of the diagonals of this matrix gives us the standard error for the betas.
+
+The estimate for $\sigma^{2}$ (known as the 'mean squared error') is the following:
+
+$$\hat{\sigma}^{2} = \frac{1}{N - p}(r^{T}r)$$
+
+where $r$ is our vector of residuals, $N$ number of observations, $p$ the number of columns in the design matrix (intercept included).
+```{r}
+var_est <- as.numeric((1/(nrow(x_mt) - ncol(x_mt)))*t(residuals_mt) %*% residuals_mt)
+```
+Estimate for the variance is `r var_est`.
+
+Knowing the variance, we can plug it into our formula for the betas variance/co-variance matrix:
+```{r}
+var_covar_beta_mt <- var_est * solve(XtX_mt)
+print(var_covar_beta_mt)
+```
+
+Taking the square root of the diagonals of the var/co-variance matrix will give us the standard errors for the betas.
+```{r}
+beta_se_v <- sqrt(diag(var_covar_beta_mt))
+print(beta_se_v)
+```
+
+This result compares with our *lm* result:
+```{r}
+mpg_formula_summary <- summary(mpg_formula_obj)
+print(mpg_formula_summary$coefficients[4:6])
+```
+
+## Finishing up
+
+:::topic
+Calculate the t-values for the betas.
+:::
+```{r}
+tvals_mt <- betas_mt/beta_se_v
+print(tvals_mt)
+```
+
+:::topic
+Calculate the p-values for the betas.
+::: 
+```{r}
+pval_fun <- function(tval, x){2 * pt(abs(tval), df = nrow(x)-ncol(x), lower.tail = F)}
+pvals_lst <- purrr::map(tvals_mt[,1], pval_fun, x = x_mt)
+pvals_mt <- matrix(unlist(pvals_lst), byrow = T)
+print(pvals_mt)
+```
+
+:::topic
+Calculate $R^{2}$.
+:::
+```{r}
+r_sq <- sum((predicted_mt - mean(y_mt))^2)/sum((y_mt - mean(y_mt))^2)
+```
+$R^{2}$ = `r r_sq`
+
+:::topic
+Calculate adjusted $R^{2}$.
+:::
+```{r}
+r_sq_adj <- 1 - (((1 - r_sq) * (nrow(x_mt) - 1))/(nrow(x_mt)-(ncol(x_mt)-1)-1))
+```
+$R^{2}_{adj}$ = `r r_sq_adj`
+
+:::topic
+Put all the calculations together.
+:::
+```{r}
+df <- data.frame(
+  var = c("x0", "hp", "disp"),
+  b = betas_mt[,1],
+  se = beta_se_v,
+  t_value = tvals_mt[,1],
+  p_value = pvals_mt[,1],
+  r2 = c(r_sq, NA, NA),
+  adj_r2 = c(r_sq_adj, NA, NA)
+)
+
+RplotterPkg::create_table(
+  x = df,
+  decimals_lst = list(cols = c(2,3,4,5,6,7), decimal = 4),
+  container_width_px = 400
+)
+```
+

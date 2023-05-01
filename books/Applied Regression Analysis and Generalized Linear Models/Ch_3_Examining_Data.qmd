@@ -1,0 +1,376 @@
+---
+title: "Applied Regression Analysis & Generalized Linear Models"
+author: "Rick Dean"
+format: 
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: false
+    number-offset: 0
+    self-contained: true
+    smooth-scroll: true
+    code-fold: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 12
+    fig-height: 6
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    css: ../../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "Notes and graphics from the book [Applied Regression Analysis and Generalized Linear Models](https://www.john-fox.ca/AppliedRegression/index.html) by John Fox. The following R script is following Chapter 3 'Examining Data'"
+---
+
+
+::: topic
+Load the Required R Packages:
+:::
+
+```{r}
+#| warning: false
+#| message: false
+
+library(data.table)
+library(ggplot2)
+library(ggrepel)
+library(here)
+library(gt)
+library(magrittr)
+library(RplotterPkg)
+library(RregressPkg)
+```
+
+# 3 Examining Data
+
+## 3.1 Univariate Displays
+
+### 3.1.1 Histograms
+
+::: topic 
+Read and show the histogram of infant mortality rates
+:::
+```{r}
+#| fig-cap: "Histogram of United Nations infant mortality data"
+
+data_path <- file.path(here(),
+  "books",
+  "Applied Regression Analysis and Generalized Linear Models",
+  "data", 
+  "UnitedNations.txt"
+)
+un_dt <- data.table::fread(data_path) %>%
+  .[, .(country, infantMortality)] %>%
+  na.omit(.)
+
+infantMortality_levels <- seq(0,170,by=10)
+
+RplotterPkg::create_bar_plot(
+  df = un_dt,
+  aes_x = "infantMortality",
+  x_major_breaks = infantMortality_levels,
+  bar_fill = "blue",
+  bar_alpha = 0.6,
+  x_title = "Infant Mortality Rate(per 1000)",
+  y_title = "Frequency",
+  rot_y_tic_label = T
+)
+```
+
+::: topic
+Show a stem and leaf disply of the United Nations infant mortality data.
+:::
+```{r}
+#| fig-cap: "Stem and leaf disply of the United Nations infant mortality data"
+
+RplotterPkg::stem_leaf_display(
+  x = list("infant_mortality" = un_dt$infantMortality),
+  col_width = 20,
+  font_sz = 14
+)
+```
+
+### 3.1.2 Nonparametric Density Estimation
+
+::: topic
+Plot the nonparametric density estimation of infant mortality rates using a naive or uniform kernal.
+:::
+```{r}
+#| fig-cap: "Nonparametric density estimation of infant mortality rates using a naive or uniform kernal"
+
+uniform_kernal_fun <- function(z){
+  ifelse(abs(z) < 1, 0.5, 0)
+}
+
+h <- 7
+n <- nrow(un_dt)
+nh <- n * h
+prob_v <- rep(0, n)
+
+data.table::setorderv(un_dt, cols = "infantMortality")
+
+for(i in 1:n){
+  x0 <- un_dt$infantMortality[i]
+ z_v <- (un_dt$infantMortality - x0)/h
+ kernal_v <- uniform_kernal_fun(z_v)
+ prob_v[[i]] <- sum(kernal_v)/nh
+}
+
+prob_df <- data.frame(
+  x = un_dt$infantMortality,
+  y = prob_v
+)
+
+RplotterPkg::create_scatter_plot(
+  df = prob_df,
+  aes_x = "x",
+  aes_y = "y",
+  x_title = "Infant Mortality Rate(per 1000)",
+  y_title = "Estimated Density",
+  # x_limits = c(0, 30000),
+  # x_major_breaks = seq(0,30000,5000),
+  y_limits = c(0, 0.030),
+  y_major_breaks = seq(0,0.030,0.005),
+  show_pts = F,
+  connect = T,
+  rot_y_tic_label = T,
+  line_color = "blue"
+)
+```
+
+::: topic
+Plot the nonparametric density estimation of infant mortality rates using a normal density function kernal.
+:::
+```{r}
+#| fig-cap: "Nonparametric density estimation of infant mortality rates using a normal kernal"
+
+normal_kernal_fun <- function(z){
+  con_pi <- (2 * pi)^-0.5
+  return(con_pi * exp(-0.5 * z^2))
+}
+
+h <- 7
+n <- nrow(un_dt)
+nh <- n * h
+prob_v <- rep(0, n)
+
+for(i in 1:n){
+  x0 <- un_dt$infantMortality[i]
+  z_v <- (un_dt$infantMortality - x0)/h
+  kernal_v <- normal_kernal_fun(z_v)
+  prob_v[[i]] <- sum(kernal_v)/nh
+}
+
+prob_df <- data.frame(
+  x = un_dt$infantMortality,
+  y = prob_v
+)
+
+RplotterPkg::create_scatter_plot(
+  df = prob_df,
+  aes_x = "x",
+  aes_y = "y",
+  x_title = "Infant Mortality Rate(per 1000)",
+  y_title = "Estimated Density",
+  # x_limits = c(0, 30000),
+  # x_major_breaks = seq(0,30000,5000),
+  y_limits = c(0, 0.030),
+  y_major_breaks = seq(0,0.030,0.005),
+  show_pts = F,
+  connect = T,
+  rot_y_tic_label = T,
+  line_color = "blue"
+)
+```
+
+::: topic
+Plot the nonparametric density estimation of infant mortality rates using a Epanechnikov kernel.
+:::
+```{r}
+#| fig-cap: "Nonparametric density estimation of infant mortality rates using a Epanechnikov kernal"
+
+e_kernal_fun <- function(z){
+  ifelse(abs(z) <= 1, 0.75 * (1 - z^2), 0)
+}
+
+h <- 7
+n <- nrow(un_dt)
+nh <- n * h
+prob_v <- rep(0, n)
+
+for(i in 1:n){
+  x0 <- un_dt$infantMortality[i]
+  z_v <- (un_dt$infantMortality - x0)/h
+  kernal_v <- e_kernal_fun(z_v)
+  prob_v[[i]] <- sum(kernal_v)/nh
+}
+
+prob_df <- data.frame(
+  x = un_dt$infantMortality,
+  y = prob_v
+)
+
+RplotterPkg::create_scatter_plot(
+  df = prob_df,
+  aes_x = "x",
+  aes_y = "y",
+  x_title = "Infant Mortality Rate(per 1000)",
+  y_title = "Estimated Density",
+  # x_limits = c(0, 30000),
+  # x_major_breaks = seq(0,30000,5000),
+  y_limits = c(0, 0.030),
+  y_major_breaks = seq(0,0.030,0.005),
+  show_pts = F,
+  connect = T,
+  rot_y_tic_label = T,
+  line_color = "blue"
+)
+```
+
+::: topic
+Plot the nonparametric density estimation of infant mortality rates using a triangular kernel.
+:::
+```{r}
+#| fig-cap: "Nonparametric density estimation of infant mortality rates using a triangular kernal"
+
+tri_kernal_fun <- function(z){
+  ifelse(abs(z) <= 1, 1 - abs(z), 0)
+}
+
+h <- 7
+n <- nrow(un_dt)
+nh <- n * h
+prob_v <- rep(0, n)
+
+for(i in 1:n){
+  x0 <- un_dt$infantMortality[i]
+  z_v <- (un_dt$infantMortality - x0)/h
+  kernal_v <- tri_kernal_fun(z_v)
+  prob_v[[i]] <- sum(kernal_v)/nh
+}
+
+prob_df <- data.frame(
+  x = un_dt$infantMortality,
+  y = prob_v
+)
+
+RplotterPkg::create_scatter_plot(
+  df = prob_df,
+  aes_x = "x",
+  aes_y = "y",
+  x_title = "Infant Mortality Rate(per 1000)",
+  y_title = "Estimated Density",
+  # x_limits = c(0, 30000),
+  # x_major_breaks = seq(0,30000,5000),
+  y_limits = c(0, 0.030),
+  y_major_breaks = seq(0,0.030,0.005),
+  show_pts = F,
+  connect = T,
+  rot_y_tic_label = T,
+  line_color = "blue"
+)
+```
+
+### 3.1.3 Quantile-Comparison Plots
+
+::: topic 
+Display a normal quantile-comparison plot for a sample of 100 drawn from a normal population with mean 50 and standard deviation of 10.
+:::
+```{r}
+#| fig-cap: "Normal quantile-comparison plot for a sample of 100"
+
+set.seed(23)
+data_df <- data.frame(
+  idx = 1:100,
+  values = rnorm(n = 100, mean = 50, sd = 10)
+)
+RregressPkg::plot_qq(
+  df = data_df,
+  numeric_col = "values",
+  id_col = "idx",
+  labels_n = 4,
+  plot_ci_lines = T,
+  ci_line_type = "dashed",
+  x_title = "Normal Quantiles",
+  y_title = "Sample from N(50,10)",
+  rot_y_tic_label = T
+)
+```
+
+### 3.1.4 Boxplots
+
+::: topic
+Display a boxplot of the infant mortality data.
+:::
+```{r}
+RplotterPkg::create_box_plot(
+  df = un_dt,
+  aes_y = "infantMortality",
+  aes_label = "country",
+  y_title = "Infant Mortality Rates(per 1000)"
+)
+```
+
+## 3.2 Plotting Bivariate Data
+
+::: topic
+Display a parallel set of boxplots.
+:::
+```{r}
+data_path <- file.path(here(),
+  "books",
+  "Applied Regression Analysis and Generalized Linear Models",
+  "data", 
+  "Ornstein.txt"
+)
+ornstein_dt <- data.table::fread(data_path) %>%
+  .[, .(nation, interlocks)] %>% 
+  .[, nation := factor(nation)]
+
+RplotterPkg::create_box_plot(
+  df = ornstein_dt,
+  aes_x = "nation",
+  aes_y = "interlocks",
+  order_by_median = "desc",
+  x_title = "Nation of Control",
+  y_title = "Number of Interlocks"
+)
+```
+
+## 3.3 Plotting Multivariate Data
+
+### 3.3.1 Scatterplot Matrices
+
+::: topic
+Display a scatterplot matrix for occupational prestige, level of education, and level of income for 45 US occupations in 1950.
+:::
+```{r}
+#| fig-cap: "Scatterplot matrix for occupational prestige, level of education, and level of income"
+#| fig-height: 8
+
+data_path <- file.path(here(),
+  "books",
+  "Applied Regression Analysis and Generalized Linear Models",
+  "data", 
+  "Duncan.txt"
+)
+duncan_dt <- data.table::fread(data_path) %>%
+  .[, .(education, income, prestige)]
+
+RregressPkg::plot_pairs(
+  df = duncan_dt,
+  var_name_scaling = list(
+    education = NULL,
+    income = NULL,
+    prestige = NULL
+  ),
+  rot_y_tic_label = T,
+  plot_dim = 20,
+  axis_text_sz = 8
+)
+```
+
+

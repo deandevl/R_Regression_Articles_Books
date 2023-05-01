@@ -1,0 +1,451 @@
+---
+title: "GAMS in R Course"
+author: "Rick Dean"
+format: 
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: false
+    number-offset: 0
+    self-contained: true
+    smooth-scroll: true
+    code-fold: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 12
+    fig-height: 6
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    css: ../../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "The following are notes to [GAMS in R Course](https://github.com/noamross/gams-in-r-course) by Noam Ross, Chapter 1 Introduction to Generalized Additive Models."
+---
+
+::: topic
+Load the Required R Packages.
+:::
+
+```{r}
+#| warning: false
+#| message: false
+
+library(MASS)
+library(gamair)
+library(mgcv)
+library(data.table)
+library(ggplot2)
+library(magrittr)
+library(RgamPkg)
+library(RregressPkg)
+library(RplotterPkg)
+```
+
+# 1 - Introduction to Generalized Additive Models
+## 1.1 Introduction
+## 1.2 Motocycle crash data: linear approach
+
+::: topic
+Fit a linear model to MASS::mcycle data.
+:::
+
+The data are measurements of acceleration of a crash-test dummy head during a motorcycle crash.
+
+```{r}
+#| fig-cap: Linear fit of *times*(milliseconds) vs *accel*(g) during a motocycle crash
+
+data("mcycle")
+
+mcycle_lm <- stats::lm(formula = accel ~ times, data = mcycle)
+
+linear_df <- data.table::as.data.table(mcycle) %>% 
+  .[, fit := mcycle_lm$fitted.values] %>% 
+  .[, residual := mcycle_lm$residuals]
+
+RplotterPkg::create_scatter_plot(
+  df = linear_df,
+  aes_x = "times",
+  aes_y = "accel",
+  x_title = "times",
+  y_title = "accel",
+  rot_y_tic_label = T,
+  y_limits = c(-150, 150),
+  y_major_breaks = seq(-150, 150, 50)
+) + ggplot2::geom_line(aes(y = fit), color="blue", alpha=0.6)
+```
+
+```{r}
+#| fig-cap: Check of motorcycle linear model
+#| fig-height: 7
+
+RregressPkg::plot_model_check(
+  fitted_v = mcycle_lm$fitted.values,
+  response_v = mcycle$accel,
+  residual_v = mcycle_lm$residuals,
+  histo_fill = "blue",
+  histo_alpha = 0.5,
+  ref_line_color = "darkorange"
+)
+```
+
+## 1.3 Motocycle crash data: non-linear approach
+
+::: topic
+Fit a model to the `mcycle` data where `accel` has a smooth, nonlinear relation to `times` using `mgcv::gam()` function.
+:::
+
+```{r}
+#| fig-cap: Non-linear fit of *times*(milliseconds) vs *accel*(g) during a motocycle crash
+
+mcycle_mod_gam <- mgcv::gam(formula = accel ~ s(times), data = mcycle)
+
+nonlinear_df <- data.frame(
+  times = mcycle_mod_gam$model$times,
+  accel = mcycle_mod_gam$model$accel,
+  fit = mcycle_mod_gam$fitted.values,
+  residual = mcycle_mod_gam$residuals
+)
+RplotterPkg::create_scatter_plot(
+  df = nonlinear_df,
+  aes_x = "times",
+  aes_y = "accel",
+  connect = F,
+  show_pts = T,
+  x_title = "Time",
+  y_title = "Acceleration",
+  y_limits = c(-150, 150),
+  y_major_breaks = seq(-150, 150, 50),
+  rot_y_tic_label = T
+) + ggplot2::geom_line(aes(y = fit), color="blue", alpha=0.6)
+```
+
+```{r}
+#| fig-cap: GAM model term *times* in nonlinear fit of acceleration *s(times)* during a motocycle crash
+
+RgamPkg::plot_gam_1d(
+  gam_model = mcycle_mod_gam,
+  columns = 1,
+  col_width = 10,
+  row_height = 8,
+  se_fill = "white",
+  line_width = 0.5,
+  y_limits = c(-150, 150),
+  y_major_breaks = seq(-150, 150, 50)
+)
+```
+
+
+
+```{r}
+#| fig-cap: Check of motorcycle non-linear model
+#| fig-height: 7
+
+RregressPkg::plot_model_check(
+  fitted_v = mcycle_mod_gam$fitted.values,
+  response_v = mcycle$accel,
+  residual_v = mcycle_mod_gam$residuals,
+  histo_fill = "blue",
+  histo_alpha = 0.5,
+  ref_line_color = "darkorange"
+)
+```
+
+## 1.4 Parts of non-linear function
+
+::: topic
+Plot the basis functions that make up the GAM model.
+:::
+
+```{r}
+#| fig-cap: Basis functions that make up the GAM MASS::mcycle model
+
+RgamPkg::plot_basis_splines_1d(
+  gam_model = mcycle_mod_gam,
+  term = "times",
+  show_points = T,
+  pts_color = "blue",
+  legend_pos = "top",
+  x_title = "Times",
+  y_title = "Acceleration",
+  caption = "Solid red line is the fitted GAM",
+  rot_y_tic_label = T
+)
+```
+
+## 1.6 Setting complexity of the motorcycle model
+
+::: topic
+Fit a GAM with 3 basis functions and plot.
+:::
+
+```{r}
+#| fig-cap: Nonlinear fit and residual of motorcycle data using 3 basis functions
+
+mcycle_gam_3 <- mgcv::gam(formula = accel ~ s(times, k = 3), data = mcycle)
+
+nonlinear_3_df <- data.frame(
+  times = mcycle_gam_3$model$times,
+  accel = mcycle_gam_3$model$accel,
+  fit = mcycle_gam_3$fitted.values,
+  residual = mcycle_gam_3$residuals
+)
+nonlinear_3_plot <- RplotterPkg::create_scatter_plot(
+  df = nonlinear_3_df,
+  aes_x = "times",
+  aes_y = "accel",
+  connect = F,
+  show_pts = T,
+  x_title = "Time",
+  y_title = "Acceleration",
+ # y_limits = c(-150, 150),
+ # y_major_breaks = seq(-150, 150, 50),
+  rot_y_tic_label = T
+) + ggplot2::geom_line(aes(y = fit), color="blue", alpha=0.6)
+
+nonlinear_3_residual_plot <- RplotterPkg::create_scatter_plot(
+  df = nonlinear_3_df,
+  aes_x = "fit",
+  aes_y = "residual",
+  x_title = "Fit",
+  y_title = "Residual",
+  rot_y_tic_label = T,
+ # y_limits = c(-150, 150),
+ # y_major_breaks = seq(-150, 150, 50)
+) + geom_hline(yintercept = 0, color = "red", linewidth = 1)
+
+layout <- list(
+  plots = list(nonlinear_3_plot, nonlinear_3_residual_plot),
+  rows = c(1,2),
+  cols = c(1,1)
+)
+RplotterPkg::multi_panel_grid(
+  layout = layout,
+  col_widths = 10,
+  row_heights = c(6,6)
+)
+```
+
+::: topic
+Fit a GAM with 20 basis functions and plot.
+:::
+
+```{r}
+#| fig-cap: Nonlinear fit and residual of motorcycle data using 20 basis functions
+
+mcycle_gam_20 <- mgcv::gam(formula = accel ~ s(times, k = 20), data = mcycle)
+
+nonlinear_20_df <- data.frame(
+  times = mcycle_gam_20$model$times,
+  accel = mcycle_gam_20$model$accel,
+  fit = mcycle_gam_20$fitted.values,
+  residual = mcycle_gam_20$residuals
+)
+nonlinear_20_plot <- RplotterPkg::create_scatter_plot(
+  df = nonlinear_20_df,
+  aes_x = "times",
+  aes_y = "accel",
+  connect = F,
+  show_pts = T,
+  x_title = "Time",
+  y_title = "Acceleration",
+#  y_limits = c(-150, 150),
+#  y_major_breaks = seq(-150, 150, 50),
+  rot_y_tic_label = T
+) + ggplot2::geom_line(aes(y = fit), color="blue", alpha=0.6)
+
+nonlinear_20_residual_plot <- RplotterPkg::create_scatter_plot(
+  df = nonlinear_20_df,
+  aes_x = "fit",
+  aes_y = "residual",
+  x_title = "Fit",
+  y_title = "Residual",
+  rot_y_tic_label = T,
+#  y_limits = c(-150, 150),
+#  y_major_breaks = seq(-150, 150, 50)
+) + geom_hline(yintercept = 0, color = "red", linewidth = 1)
+
+layout <- list(
+  plots = list(nonlinear_20_plot, nonlinear_20_residual_plot),
+  rows = c(1,2),
+  cols = c(1,1)
+)
+RplotterPkg::multi_panel_grid(
+  layout = layout,
+  col_widths = 10,
+  row_heights = c(6,6)
+)
+```
+
+## 1.7 Using smoothing parameters to avoid overfitting
+
+> The smoothing parameter balances between likelihood and wiggliness to optimize model fit.
+
+::: topic
+Plot the nonlinear fit GAM model with smoothing parameters 0.1 and 0.0001.
+:::
+
+```{r}
+#| fig-cap: Nonlinear fit GAM model with smoothing parameters 0.1
+
+smooth_gam_1 <- mgcv::gam(formula = accel ~ s(times), data = mcycle, sp = 0.1)
+smooth_gam_1_df <- data.frame(
+  times = smooth_gam_1$model$times,
+  accel = smooth_gam_1$model$accel,
+  fit = smooth_gam_1$fitted.values
+)
+RplotterPkg::create_scatter_plot(
+  df = smooth_gam_1_df,
+  aes_x = "times",
+  aes_y = "accel",
+  connect = F,
+  show_pts = T,
+  x_title = "Time",
+  y_title = "Acceleration",
+  y_limits = c(-150, 150),
+  y_major_breaks = seq(-150, 150, 50)
+) + ggplot2::geom_line(aes(y = fit), color="blue", alpha=0.6)
+```
+
+```{r}
+#| fig-cap: Nonlinear fit GAM model with smoothing parameters 0.0001
+
+smooth_gam_0001 <- mgcv::gam(formula = accel ~ s(times), data = mcycle, sp = 0.0001)
+smooth_gam_0001_df <- data.frame(
+  times = smooth_gam_0001$model$times,
+  accel = smooth_gam_0001$model$accel,
+  fit = smooth_gam_0001$fitted.values
+)
+RplotterPkg::create_scatter_plot(
+  df = smooth_gam_0001_df,
+  aes_x = "times",
+  aes_y = "accel",
+  connect = F,
+  show_pts = T,
+  x_title = "Time",
+  y_title = "Acceleration",
+  y_limits = c(-150, 150),
+  y_major_breaks = seq(-150, 150, 50)
+) + ggplot2::geom_line(aes(y = fit), color="blue", alpha=0.6)
+```
+
+## 1.10 Multivariate GAMs of auto performance
+
+> Multivariate GAMs can contain a mixture of smooths, linear effects, and continuous and categorical variables.
+
+::: topic
+Fit a GAM model to city.mpg with weight, length, and price from the `gamair::mpg` package.
+:::
+
+::: topic
+Show the relationships among the response and independent terms.
+:::
+
+```{r}
+#| warning: false
+#| fig-cap: Relationships among *city.mpg*, *weight*, *length*, *price*
+#| fig-height: 7
+
+data("mpg", package = "gamair")
+var_name_scaling_lst <- list(
+  weight = NULL,
+  length = NULL,
+  price = NULL,
+  city.mpg = NULL
+)
+RregressPkg::plot_pairs(
+  df = mpg,
+  var_name_scaling = var_name_scaling_lst,
+  rot_y_tic_label = T,
+  plot_dim = 16
+)
+```
+
+::: topic
+Plot the GAM model's terms and their relationship with the response city.mpg.
+:::
+
+```{r}
+#| fig-cap: GAM model terms related to *city.mpg* response
+#| fig-height: 7
+
+city_mpg_gam <- mgcv::gam(formula = city.mpg ~ s(weight) + s(length) + s(price), data = mpg, method = "REML")
+
+RgamPkg::plot_gam_1d(
+  gam_model = city_mpg_gam,
+  col_width = 8,
+  row_height = 8,
+  se_fill = "white",
+  y_limits = c(-20, 30),
+  y_major_breaks = seq(-20, 30, 10),
+  line_width = 0.7
+)
+```
+
+::: topic
+Check the GAM model for its fit to city.mpg.
+:::
+
+```{r}
+#| fig-height: 7
+#| fig-cap: Check of GAM model for its fit to *city.mpg*.
+
+RregressPkg::plot_model_check(
+  fitted_v = city_mpg_gam$fitted.values,
+  response_v = city_mpg_gam$model$city.mpg,
+  residual_v = city_mpg_gam$residuals,
+  histo_fill = "blue",
+  histo_alpha = 0.5,
+  ref_line_color = "darkorange"
+)
+```
+
+
+## 1.11 Adding categorial to the auto performance model
+
+::: topic
+Add categorical terms fuel, drive, and style to the above GAM model for city.mpg.
+:::
+
+```{r}
+#| fig-height: 7
+#| fig-cap: GAM model with categorical terms related to *city.mpg* response
+
+data("mpg", package = "gamair")
+city_mpg_2_gam <- mgcv::gam(formula = city.mpg ~ s(weight) + s(length) + s(price) + fuel + drive + style, data = mpg, method = "REML")
+
+RgamPkg::plot_gam_1d(
+  gam_model = city_mpg_2_gam,
+  col_width = 8,
+  row_height = 8,
+  se_fill = "white",
+  line_width = 0.7
+)
+```
+
+## 1.12 Category-level smooths for different auto types
+
+::: topic
+Make each of the smooth terms weight, length, and price depend on the drive category variable using by= in the smooth terms.
+:::
+
+```{r}
+#| fig-height: 7
+#| fig-cap: GAM model with categorical term using the *by* parameter.
+
+data("mpg", package = "gamair")
+city_mpg_3_gam <- mgcv::gam(formula = city.mpg ~ s(weight, by = drive) + s(length, by = drive) + s(price, by = drive), data = mpg, method = "REML")
+
+RgamPkg::plot_gam_1d(
+  gam_model = city_mpg_3_gam,
+  columns = 3,
+  col_width = 7.0,
+  row_height = 6.0,
+  se_fill = "white",
+  line_width = 0.7
+)
+```
+
+

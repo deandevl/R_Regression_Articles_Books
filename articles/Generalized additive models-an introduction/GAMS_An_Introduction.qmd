@@ -1,0 +1,315 @@
+---
+title: "GAMS: An Introduction"
+author: "Rick Dean"
+format: 
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: true
+    number-offset: 0
+    self-contained: true
+    smooth-scroll: true
+    code-fold: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 12
+    fig-height: 6
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    css: ../../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "Notes and completed tasks from the article [Generalised additive models (GAMs): an introduction](http://environmentalcomputing.net/intro-to-gams/) by Mitchell Lyons."
+---
+
+
+::: topic
+Load the Required R Packages:
+:::
+
+```{r}
+#| warning: false
+#| message: false
+
+library(data.table)
+library(ggplot2)
+library(mgcv)
+library(magrittr)
+library(here)
+library(gt)
+library(magrittr)
+library(RplotterPkg)
+library(RregressPkg)
+```
+
+# Generalized Additive Models (GAMS)
+
+> Many data in the environmental sciences do not fit simple linear models and are best described by "wiggly models"; also known as Generalized Additive Models (GAMS).
+
+## GAMS in a nutshell
+The linear model:
+$$y = \beta_{0} + x_{1}\beta_{1} + \epsilon_{}, \space\epsilon \sim N(0,\sigma^{2})$$
+What changes in a GAM is the presence of a smoothing term $f(x_{1})$.
+
+$$y = \beta_{0} + f(x_{1}) + \epsilon, \space\epsilon \sim N(0,\sigma^{2})$$
+
+## A simple example
+
+:::topic
+ Create some sin wave shaped random data and plot.
+:::
+```{r}
+#| fig-cap: Sin wave shaped random data.
+
+set.seed(2)
+x <- seq(0, pi * 2, 0.1)
+sin_x <- sin(x)
+y <- sin_x + rnorm(n = length(x), mean = 0, sd = sd(sin_x/2))
+sample_data_dt <- data.table(
+  x = x,
+  y = y
+)
+
+RplotterPkg::create_scatter_plot(
+  df = sample_data_dt,
+  aes_x = "x",
+  aes_y = "y"
+)
+```
+
+:::topic
+From the *mgcv::* package create a GAM model of the data, summarize, and plot the model over the observations.
+:::
+```{r}
+#| fig-cap: Sin wave shaped random data with fitted GAM model.
+
+gam_model <- mgcv::gam(y ~ s(x), method = "REML", data = sample_data_dt)
+
+summary(gam_model)
+
+sample_data_dt[, fit := gam_model$fitted.values]
+
+RplotterPkg::create_scatter_plot(
+  df = sample_data_dt,
+  aes_x = "x",
+  aes_y = "y"
+) +
+  geom_line(aes(y = fit), color = "red")
+```
+
+> The 'edf' is the estimated degrees of freedom - essentially, the larger the number, the more wiggly the fitted model. Values of around 1 tend to be close to a linear term.
+
+:::topic
+Check the model fit.
+:::
+```{r}
+#| fig-cap: GAM model summary and check plot
+#| fig-height: 7
+
+RregressPkg::plot_model_check(
+  fitted_v = gam_model$fitted.values,
+  response_v = sample_data_dt$y,
+  residual_v = gam_model$residuals,
+  histo_fill = "blue",
+  histo_alpha = 0.7
+)
+```
+
+
+## Smooth terms
+
+The smooth term $f(x_{1})$ is the sum of some number of functions:
+$$f(x_{1}) = \sum b_{j}(x_{1})\beta_{j}$$ 
+For j = 1 to k smooth terms.
+
+:::topic
+From the GAM model obtain the term function values $b_{j}(x_{1})$ and sum the product of the model's coefficients by these values to obtain the fitted values. Plot the fitted values and compare to the above model plot.
+:::
+```{r}
+#| fig-cap: Sin wave shaped random data with calculated fit values from a GAM model.
+
+term_values <- mgcv::predict.gam(gam_model, type = "lpmatrix") # 63 x 10
+model_coef <- gam_model$coefficients # 10 x 1
+fitted_data <- term_values %*% model_coef
+
+sample_data_dt[, fit2 := fitted_data]
+
+RplotterPkg::create_scatter_plot(
+  df = sample_data_dt,
+  aes_x = "x",
+  aes_y = "y"
+) +
+  geom_line(aes(y = fit2), color = "red")
+```
+
+Note that in this example there are 10 $k$ smooth terms including an intercept.
+
+:::topic
+Plot the 9 individual term values (not including the intercept) that sum up to make the resulting fit.
+:::
+```{r}
+dt <- cbind(sample_data_dt, term_values[,2:10])
+
+RplotterPkg::create_scatter_plot(
+  df = dt,
+  aes_x = "x",
+  aes_y = "y"
+) +
+  geom_line(aes(y = fit), color = "red") +
+  geom_line(aes(y = `s(x).1`),linetype = "dashed", color = "#00B33C") +
+  geom_line(aes(y = `s(x).2`),linetype = "dashed", color = "#0000CC") +
+  geom_line(aes(y = `s(x).3`),linetype = "dashed", color = "#E60099") +
+  geom_line(aes(y = `s(x).4`),linetype = "dashed", color = "#F09900") +
+  geom_line(aes(y = `s(x).5`),linetype = "dashed", color = "#FF1919") +
+  geom_line(aes(y = `s(x).6`),linetype = "dashed", color = "#FFFF00") +
+  geom_line(aes(y = `s(x).7`),linetype = "dashed", color = "#4DFFFF") +
+  geom_line(aes(y = `s(x).8`),linetype = "dashed", color = "#FF99FF") +
+  geom_line(aes(y = `s(x).9`),linetype = "dashed", color = "#121464") 
+```
+
+:::topic
+Plot the predictors' model contribution to the response using *mgcv::plot(gam_model)* 
+:::
+```{r}
+#| fig-cap: "Predictors' model contribution to the response using *mgcv::plot(gam_model)*"
+
+mgcv::plot.gam(gam_model)
+```
+
+:::topic
+As an alternative, use *RgamPkg::plot_gam_1d(gam_model)* for a *ggplot2* based plot the predictor variable.
+:::
+```{r}
+#| fig-cap: "Predictors' model contribution to the response using *RgamPkg::plot_gam_1d(gam_model)*"
+
+RgamPkg::plot_gam_1d(
+  gam_model = gam_model,
+  columns = 1,
+  col_width = 12,
+  row_height = 12
+)
+```
+
+## A quick real example
+
+:::topic
+Read in the CO2 data from Manua Loa and plot.
+:::
+```{r}
+#| fig-cap: "Manua Loa CO2 Data"
+
+data_file_path <- file.path(here(), "articles", "Generalized additive models-an introduction","manua_loa_co2.csv")
+
+co2_dt <- data.table::fread(data_file_path) %>% 
+  .[, time := as.integer(as.Date(Date, format = "%d/%m/%Y"))]
+
+RplotterPkg::create_scatter_plot(
+  df = co2_dt,
+  aes_x = "time",
+  aes_y = "co2",
+  show_pts = FALSE,
+  connect = TRUE,
+  rot_y_tic_label = TRUE,
+  x_title = "time",
+  y_title = "co2"
+)
+```
+
+:::topic
+Fit a simple GAM model with a single smooth term for *time* and plot the predicted values from this term between the years 2000 to 2010.
+:::
+$$y = \beta_{0} + f_{trend}(time) + \epsilon, \space\epsilon \sim N(0, \sigma^{2})$$
+```{r}
+#| fig-cap: "GAM model that predicts co2 values from *time* term, 2000 to 2010"
+co2_2000_2010_dt <- co2_dt[year %in% 2000:2010,]
+co2_time_gam <- mgcv::gam(co2 ~ s(time), data = co2_2000_2010_dt, method = "REML")
+co2_time_gam_summary <- summary(co2_time_gam)
+
+RgamPkg::plot_gam_1d(
+  gam_model = co2_time_gam,
+  columns = 1,
+  col_width = 12,
+  row_height = 12
+)
+```
+
+Note how the smooth term actually reduces to a 'normal' linear term with a edf of `r co2_time_gam_summary$edf`.
+
+
+:::topic
+Check the model's fit.
+:::
+```{r}
+#| fig-cap: "Check on GAM model fit co2 ~ s(time)"
+#| fig-height: 8
+
+RregressPkg::plot_model_check(
+  fitted_v = co2_time_gam$fitted.values,
+  response_v = co2_2000_2010_dt$co2,
+  residual_v = co2_time_gam$residuals,
+  histo_fill = "blue",
+  histo_alpha = 0.7
+)
+```
+
+> The residual plots have a very odd looking rise-and-fall pattern... Let's try again, and introduce something called a cyclical smoother.
+
+$$y = \beta_{0} + f_{intrannual}(month) + f_{trend}(time) + \epsilon, \space\epsilon \sim N(0, \sigma^{2})$$
+The cyclical smooth term, $f_{intrannual}(month)$ is comprised of basis functions just the same as we have seen already, except that the end points of the spline are contrained to be equal - which makes sense when we're modelling a variable that is cyclical (across month/years).
+
+We'll now see the *bs* argument to choose the type of smoother, and the *k* argument to choose the number of knots, because cubic regression splines have a set number of knots. We use 12 knots, because there are 12 months/year.
+
+:::topic
+Add a cubic cyclical term to the model and plot model's terms with the response.
+:::
+```{r}
+#| fig-cap: "Cyclical and trend GAM model and their contribution to the co2 response."
+
+co2_season_time_gam <- mgcv::gam(co2 ~ s(month, bs = "cc", k = 12) + s(time), data = co2_2000_2010_dt, method = "REML")
+
+RgamPkg::plot_gam_1d(
+  gam_model = co2_season_time_gam,
+  col_width = 10,
+  row_height = 8,
+  x_major_breaks = list(
+    `s(month)` = seq(1, 12, 1),
+    `s(time)` = seq(11000, 15000, 1000)
+  )
+)
+```
+
+:::topic
+Check the model's fit.
+:::
+```{r}
+#| fig-cap: "Check on GAM model fit co2 ~ s(month, bs = 'cc', k = 12) + s(time)"
+#| fig-height: 8
+
+RregressPkg::plot_model_check(
+  fitted_v = co2_season_time_gam$fitted.values,
+  response_v = co2_2000_2010_dt$co2,
+  residual_v = co2_season_time_gam$residuals,
+  histo_fill = "blue",
+  histo_alpha = 0.7
+)
+```
+
+## Communicating the results
+
+:::topic
+Plot the final GAM model over the observed data.
+:::
+```{r}
+co2_2000_2010_dt[, fit := co2_season_time_gam$fitted.values]
+
+RplotterPkg::create_scatter_plot(
+  df = co2_2000_2010_dt,
+  aes_x = "time",
+  aes_y = "co2"
+) +
+  geom_line(aes(y = fit), color = "red")
+```
+

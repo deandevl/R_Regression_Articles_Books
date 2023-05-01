@@ -1,0 +1,308 @@
+---
+title: "Applied Regression Analysis & Generalized Linear Models"
+author: "Rick Dean"
+format: 
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: false
+    number-offset: 0
+    self-contained: true
+    smooth-scroll: true
+    code-fold: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 12
+    fig-height: 6
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    css: ../../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "Notes and graphics from the book [Applied Regression Analysis and Generalized Linear Models](https://www.john-fox.ca/AppliedRegression/index.html) by John Fox. The following R script is following Chapter 18 'Nonparametric Regression'"
+---
+
+::: topic
+Load the Required R Packages:
+:::
+
+```{r}
+#| warning: false
+#| message: false
+
+library(data.table)
+library(ggplot2)
+library(here)
+library(gt)
+library(magrittr)
+library(RplotterPkg)
+```
+
+# 18 Nonparametric Regression
+
+## 18.1 Nonparametric Simple Regression: Scatterplot Smoothing
+
+### 18.1.1 Kernal Regression
+
+::: topic
+Read in the Prestige data of income vs prestige.
+:::
+```{r}
+data_path <- file.path(here(),
+  "books",
+  "Applied Regression Analysis and Generalized Linear Models",
+  "data", 
+  "Prestige.txt"
+)
+prestige_dt <- data.table::fread(data_path) %>%
+  data.table::setorderv(., cols = "income") %>%
+  .[, .(income, prestige)]
+```
+
+::: topic
+Plot the window containing the $m = 40$ nearest $X$ neighbors of the focal point $x_{(80)}$.
+:::
+```{r}
+#| fig-cap: "A window containing the m = 40 nearest neighbors of the focal value x(80)."
+
+neighbors_fun <- function(df, col, idx, m){
+  val <- df[[idx,col]]
+  vals <- df[[col]]
+  copy_dt <- data.table::as.data.table(df)
+  copy_dt[, `:=`(indexes = 1:nrow(copy_dt), val_dif = abs(vals - val))] %>%
+    data.table::setorderv(., cols = "val_dif")
+  return(copy_dt$indexes[1:m])
+ #
+}
+m = 40
+indexes_80 <- neighbors_fun(df = prestige_dt, col = "income", idx = 80, m = m)
+vals_80_dt <- prestige_dt[indexes_80]
+vals_80_dt[, idx := indexes_80] %>% 
+  data.table::setorder(., idx)
+income_80 <- vals_80_dt[idx == 80]$income 
+RplotterPkg::create_scatter_plot(
+  df = vals_80_dt,
+  aes_x = "income",
+  aes_y = "prestige",
+  x_title = "Average Income(dollars)",
+  y_title = "Prestige",
+  x_limits = c(0, 30000),
+  x_major_breaks = seq(0,30000,5000),
+  y_limits = c(0, 90),
+  y_major_breaks = seq(0,90,10),
+  show_pts = T,
+  rot_y_tic_label = T
+) +
+  geom_vline(xintercept = income_80, color = "red") +
+  geom_vline(xintercept = vals_80_dt$income[1], linetype = "dashed") +
+  geom_vline(xintercept = vals_80_dt$income[nrow(vals_80_dt)], linetype = "dashed") 
+```
+
+::: topic
+Plot the tri-cube weight function and weights for observations within the window.
+:::
+```{r}
+#| fig-cap: "Tri-cube weight function and weights for observations within the window."
+
+tricube_fun <- function(z) ifelse(abs(z) < 1, (1 - (abs(z))^3)^3, 0)
+
+x0_80 <- prestige_dt$income[80]
+income_dist_80 <- sort(abs(prestige_dt$income - x0_80))
+h_80 <- income_dist_80[40]
+z_income_80_v <- (prestige_dt$income - x0_80)/h_80
+weights_income_80_v <- tricube_fun(z_income_80_v)
+income_80 <- prestige_dt$income[[80]]
+
+weights_df <- data.frame(
+  income = prestige_dt$income,
+  weights = weights_income_80_v
+)
+
+RplotterPkg::create_scatter_plot(
+  df = weights_df,
+  aes_x = "income",
+  aes_y = "weights",
+  x_title = "Average Income(dollars)",
+  y_title = "Tricube Kernal Weight",
+  x_limits = c(0, 30000),
+  x_major_breaks = seq(0,30000,5000),
+  y_limits = c(0, 1),
+  y_major_breaks = seq(0,1,0.2),
+  show_pts = T,
+  connect = T,
+  rot_y_tic_label = T
+) +
+  geom_vline(xintercept = income_80, color = "red") +
+  geom_vline(xintercept = vals_80_dt$income[1], linetype = "dashed") +
+  geom_vline(xintercept = vals_80_dt$income[nrow(vals_80_dt)], linetype = "dashed") 
+```
+
+::: topic
+Plot the weighted average $\hat{Y}_{(80)}$ of the $Y$ values in the window.
+:::
+```{r}
+#| fig-cap: "Weighted average of the $Y$ values in the window."
+
+yhat_80 <- sum(prestige_dt$prestige * weights_income_80_v)/sum(weights_income_80_v)
+yhat_df <- data.frame(
+  x = c(vals_80_dt$income[1], vals_80_dt$income[nrow(vals_80_dt)]),
+  y = c(yhat_80, yhat_80)
+)
+
+RplotterPkg::create_scatter_plot(
+  df = yhat_df,
+  aes_x = "x",
+  aes_y = "y",
+  x_title = "Average Income(dollars)",
+  y_title = "Prestige",
+  x_limits = c(0, 30000),
+  x_major_breaks = seq(0,30000,5000),
+  y_limits = c(0, 90),
+  y_major_breaks = seq(0,90,10),
+  show_pts = T,
+  connect = T,
+  line_color = "blue",
+  rot_y_tic_label = T
+) +
+  geom_vline(xintercept = income_80, color = "red") +
+  geom_vline(xintercept = vals_80_dt$income[1], linetype = "dashed") +
+  geom_vline(xintercept = vals_80_dt$income[nrow(vals_80_dt)], linetype = "dashed") 
+```
+
+::: topic
+Plot the nonparametric regression line connecting the locally weighted averages centered at each $x_{(i)}$.
+:::
+```{r}
+#| fig-cap: "Nonparametric regression line connecting the locally weighted averages centered at each x observation"
+
+n <- nrow(prestige_dt)
+yhat_v <- rep(0, n)
+
+for(i in 1:n){
+  x0 <- prestige_dt$income[i]
+  dist <- sort(abs(prestige_dt$income - x0))
+  h <- dist[40]
+  z_v <- (prestige_dt$income - x0)/h
+  weights_v <- tricube_fun(z_v)
+  yhat_v[i] <- sum(prestige_dt$prestige * weights_v)/sum(weights_v)
+}
+
+smooth_average_df <- data.table(
+  x = prestige_dt$income,
+  y = prestige_dt$prestige,
+  yhat = yhat_v
+)
+
+RplotterPkg::create_scatter_plot(
+  df = smooth_average_df,
+  aes_x = "x",
+  aes_y = "yhat",
+  x_title = "Average Income(dollars)",
+  y_title = "Prestige",
+  x_limits = c(0, 30000),
+  x_major_breaks = seq(0,30000,5000),
+  y_limits = c(0, 90),
+  y_major_breaks = seq(0,90,10),
+  show_pts = F,
+  connect = T,
+  rot_y_tic_label = T,
+  line_color = "blue"
+) +
+  geom_point(aes(y = y))
+```
+
+### 18.1.2 Local-Polynomial Regression
+
+::: topic
+Plot the locally weighted polynomial least-squares line of the income vs. prestige.
+:::
+```{r}
+#| fig-cap: "Nonparametric local-polynomial regression line with window span = 0.4."
+
+n <- nrow(prestige_dt)
+m = 40
+yhat_v <- rep(0, n)
+income <- prestige_dt$income
+prestige <- prestige_dt$prestige
+
+for(i in 1:n){
+  x0 <- income[i]
+  dist <- sort(abs(income - x0))
+  h <- dist[m]
+  mod <-  lm(prestige ~ income, weights=tricube_fun((income - x0)/h))
+  yhat_v[i] <- predict(mod, newdata=data.frame(income=x0))
+}
+
+smooth_poly_df <- data.table(
+  x = prestige_dt$income,
+  y = prestige_dt$prestige,
+  yhat = yhat_v
+)
+
+RplotterPkg::create_scatter_plot(
+  df = smooth_poly_df,
+  aes_x = "x",
+  aes_y = "yhat",
+  x_title = "Average Income(dollars)",
+  y_title = "Prestige",
+  x_limits = c(0, 30000),
+  x_major_breaks = seq(0,30000,5000),
+  y_limits = c(0, 90),
+  y_major_breaks = seq(0,90,10),
+  show_pts = F,
+  connect = T,
+  rot_y_tic_label = T,
+  line_color = "blue"
+) +
+  geom_point(aes(y = y))
+```
+
+::: topic
+Plot the locally weighted polynomial least-squares line of the income vs. prestige using a span = 0.6.
+:::
+```{r}
+#| fig-cap: "Nonparametric local-polynomial regression line with window span = 0.6."
+
+n <- nrow(prestige_dt)
+m <- ceiling(0.6 * n)
+
+yhat_v <- rep(0, n)
+income <- prestige_dt$income
+prestige <- prestige_dt$prestige
+
+for(i in 1:n){
+  x0 <- income[i]
+  dist <- sort(abs(income - x0))
+  h <- dist[m]
+  mod <-  lm(prestige ~ income, weights=tricube_fun((income - x0)/h))
+  yhat_v[i] <- predict(mod, newdata=data.frame(income=x0))
+}
+
+smooth_poly_df <- data.table(
+  x = prestige_dt$income,
+  y = prestige_dt$prestige,
+  yhat = yhat_v
+)
+
+RplotterPkg::create_scatter_plot(
+  df = smooth_poly_df,
+  aes_x = "x",
+  aes_y = "yhat",
+  x_title = "Average Income(dollars)",
+  y_title = "Prestige",
+  x_limits = c(0, 30000),
+  x_major_breaks = seq(0,30000,5000),
+  y_limits = c(0, 90),
+  y_major_breaks = seq(0,90,10),
+  show_pts = F,
+  connect = T,
+  rot_y_tic_label = T,
+  line_color = "blue"
+) +
+  geom_point(aes(y = y))
+```
+
+

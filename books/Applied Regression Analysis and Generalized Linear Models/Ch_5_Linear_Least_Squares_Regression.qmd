@@ -1,0 +1,48 @@
+---
+title: "Applied Regression Analysis & Generalized Linear Models"
+author: "Rick Dean"
+format: 
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: false
+    number-offset: 0
+    self-contained: true
+    smooth-scroll: true
+    code-fold: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 12
+    fig-height: 6
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    css: ../../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "Notes and graphics from the book [Applied Regression Analysis and Generalized Linear Models](https://www.john-fox.ca/AppliedRegression/index.html) by John Fox. The following R script is following Chapter 5 'Linear Least-Squares Regression'"
+---
+
+
+::: topic
+Load the Required R Packages:
+:::
+
+```{r}
+#| warning: false
+#| message: false
+
+library(data.table)
+library(ggplot2)
+library(here)
+library(gt)
+library(magrittr)
+library(RplotterPkg)
+library(RregressPkg)
+```
+
+# Linear Least-Squares Regression
+
+## 

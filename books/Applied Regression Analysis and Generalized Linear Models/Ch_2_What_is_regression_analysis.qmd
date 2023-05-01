@@ -1,0 +1,190 @@
+---
+title: "Applied Regression Analysis & Generalized Linear Models"
+author: "Rick Dean"
+format: 
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: false
+    number-offset: 0
+    self-contained: true
+    smooth-scroll: true
+    code-fold: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 12
+    fig-height: 6
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    css: ../../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "Notes and graphics from the book [Applied Regression Analysis and Generalized Linear Models](https://www.john-fox.ca/AppliedRegression/index.html) by John Fox. The following R script is following Chapter 2 'What is Regression Analysis'"
+---
+
+
+::: topic
+Load the Required R Packages:
+:::
+
+```{r}
+#| warning: false
+#| message: false
+
+library(data.table)
+library(ggplot2)
+library(ggrepel)
+library(here)
+library(gt)
+library(magrittr)
+library(RplotterPkg)
+```
+
+# 2 What is Regression Analysis
+
+## 2.2 Naive Nonparametric Regression
+
+::: topic
+Read the Davis data on mesured weight vs reported and plot.
+:::
+```{r}
+#| fig-cap: "Davis data on mesured weight vs reported"
+
+data_path <- file.path(here(),
+  "books",
+  "Applied Regression Analysis and Generalized Linear Models",
+  "data", 
+  "Davis.txt"
+)
+davis_dt <- data.table::fread(data_path) %>%
+  data.table::setorderv(., cols = "reportedWeight") %>%
+  .[, .(reportedWeight, weight)] %>% 
+  na.omit(.)
+
+outlier_df <- data.frame(
+  x = 56,
+  y = 166,
+  row = "49"
+)
+
+RplotterPkg::create_scatter_plot(
+  df = davis_dt,
+  aes_x = "reportedWeight",
+  aes_y = "weight",
+  x_title = "Reported Weight(kg)",
+  y_title = "Measured Weight(kg)",
+  x_limits = c(40, 125),
+  x_major_breaks = seq(40, 125, 5),
+  y_limits = c(20, 180),
+  y_major_breaks = seq(20, 180, 20),
+  show_pts = T,
+  rot_y_tic_label = T
+) +
+  ggrepel::geom_text_repel(data = outlier_df, aes(x = x, y = y, label = row))
+```
+
+::: topic 
+Dissect the *reportedWeight* variable into 10 bins each containing approximately 20 observations. Compute the average *reportedWeight* and *weight* for each bin and connect them with a line plot.
+:::
+```{r}
+#| fig-cap: "Naive nonparametric fit using bin averages"
+
+reportedWeight_ave <- rep(0,10)
+weight_ave <- rep(0,10)
+for(i in 1:10){
+  start <- (i - 1) * 20 + 1
+  end <- ifelse(i == 10, nrow(davis_dt), i * 20)
+  bin_df <- davis_dt[start:end,]
+  reportedWeight_ave[[i]] <- mean(bin_df$reportedWeight)
+  weight_ave[[i]] <- mean(bin_df$weight)
+}
+ave_df <- data.frame(
+  x = reportedWeight_ave,
+  y = weight_ave
+)
+
+RplotterPkg::create_scatter_plot(
+  df = davis_dt,
+  aes_x = "reportedWeight",
+  aes_y = "weight",
+  x_title = "Reported Weight(kg)",
+  y_title = "Measured Weight(kg)",
+  x_limits = c(40, 125),
+  x_major_breaks = seq(40, 125, 5),
+  y_limits = c(20, 180),
+  y_major_breaks = seq(20, 180, 20),
+  show_pts = T,
+  rot_y_tic_label = T
+) +
+  ggrepel::geom_text_repel(data = outlier_df, aes(x = x, y = y, label = row)) +
+  geom_line(data = ave_df, aes(x = x, y = y), color = "red") +
+  geom_point(data = ave_df,aes(x = x, y = y), color = "red") +
+  geom_vline(xintercept = davis_dt$reportedWeight[[20]], linetype = "dashed", color = "blue", size = 0.8) +
+  geom_vline(xintercept = davis_dt$reportedWeight[[40]], linetype = "dashed", color = "blue", size = 0.8) +
+  geom_vline(xintercept = davis_dt$reportedWeight[[60]], linetype = "dashed", color = "blue", size = 0.8) +
+  geom_vline(xintercept = davis_dt$reportedWeight[[80]], linetype = "dashed", color = "blue", size = 0.8) +
+  geom_vline(xintercept = davis_dt$reportedWeight[[100]], linetype = "dashed", color = "blue", size = 0.8) +
+  geom_vline(xintercept = davis_dt$reportedWeight[[120]], linetype = "dashed", color = "blue", size = 0.8) +
+  geom_vline(xintercept = davis_dt$reportedWeight[[140]], linetype = "dashed", color = "blue", size = 0.8) +
+  geom_vline(xintercept = davis_dt$reportedWeight[[160]], linetype = "dashed", color = "blue", size = 0.8) +
+  geom_vline(xintercept = davis_dt$reportedWeight[[180]], linetype = "dashed", color = "blue", size = 0.8) 
+
+
+```
+
+::: topic 
+Use nonparametric regression with locally weighted polynomial least-squares lines in fitting the Davis data.
+:::
+```{r}
+#| fig-cap: "Nonparametric regression with locally weighted polynomial least-squares"
+
+tricube_fun <- function(z) ifelse(abs(z) < 1, (1 - (abs(z))^3)^3, 0)
+
+n <- nrow(davis_dt)
+m <- ceiling(0.6 * n)
+
+yhat_v <- rep(0, n)
+reportedWeight <- davis_dt$reportedWeight
+weight <- davis_dt$weight
+
+for(i in 1:n){
+  x0 <- reportedWeight[i]
+  dist <- sort(abs(reportedWeight - x0))
+  h <- dist[m]
+  mod <-  lm(weight ~ reportedWeight, weights=tricube_fun((reportedWeight - x0)/h))
+  yhat_v[i] <- predict(mod, newdata=data.frame(reportedWeight=x0))
+}
+
+smooth_poly_df <- data.table(
+  x = davis_dt$reportedWeight,
+  y = davis_dt$weight,
+  yhat = yhat_v
+)
+outlier_df <- data.frame(
+  x = 56,
+  y = 166,
+  row = "49"
+)
+
+RplotterPkg::create_scatter_plot(
+  df = smooth_poly_df,
+  aes_x = "x",
+  aes_y = "yhat",
+  x_title = "Reported Weight(kg)",
+  y_title = "Measured Weight(kg)",
+  x_limits = c(40, 125),
+  x_major_breaks = seq(40, 125, 5),
+  y_limits = c(20, 180),
+  y_major_breaks = seq(20, 180, 20),
+  show_pts = F,
+  connect = T,
+  rot_y_tic_label = T,
+  line_color = "blue"
+) +
+  geom_point(aes(y = y)) +
+  ggrepel::geom_text_repel(data = outlier_df, aes(x = x, y = y, label = row))
+```
+

@@ -1,0 +1,121 @@
+---
+title: "GAMS in R Course"
+author: "Rick Dean"
+format: 
+  html:
+    toc: false
+    toc-depth: 4
+    toc-location: "right"
+    number-sections: false
+    number-offset: 0
+    self-contained: true
+    smooth-scroll: true
+    code-fold: true
+    code-block-bg: "#f1f3f5"
+    code-block-border-left: "#31BAE9"
+    code-overflow: wrap
+    tbl-cap-location: "bottom"
+    fig-width: 12
+    fig-height: 6
+    fig-align: "center"
+    fig-cap-location: "bottom"
+    css: ../../style.css
+    link-external-newwindow: true
+    abstract-title: "Abstract"
+    abstract: "The following are notes to [GAMS in R Course](https://github.com/noamross/gams-in-r-course) by Noam Ross, Chapter 2 Interpreting and Visuallizing GAMs."
+---
+
+
+::: topic
+Load the Required R Packages:
+:::
+
+```{r}
+#| warning: false
+#| message: false
+
+library(MASS)
+library(gamair)
+library(mgcv)
+library(data.table)
+library(ggplot2)
+library(magrittr)
+library(RgamPkg)
+library(RregressPkg)
+library(RplotterPkg)
+```
+
+# Interpreting and Visuallizing GAMs
+
+## 2.1 Interpreting GAM outputs
+## 2.2 Significance and lineariry
+
+::: topic
+Summarize the mpg GAM with terms weight, length, price, rpm, width.
+:::
+
+```{r}
+data("mpg", package = "gamair")
+city_mpg_gam <- mgcv::gam(
+  formula = city.mpg ~ s(weight) + s(length) + s(price) + s(rpm) + s(width),   data = mpg, 
+  method = "REML"
+)
+summary(city_mpg_gam)
+```
+The term *price* is significant and is linear because its edf is near 1.
+The term *length* is non-significant and non-linear.
+
+## 2.3 Visualizing GAMs
+## 2.4 Plotting the motorcycle crash model and data
+
+```{r}
+#| fig-cap: GAM model of motorcycle crash data's *times* term in fitting *accel* response.
+data("mcycle",package = "MASS")
+mcycle_gam <- mgcv::gam(
+  formula = accel ~ s(times),
+  data = mcycle,
+  method = "REML"
+)
+RgamPkg::plot_gam_1d(
+  gam_model = mcycle_gam,
+  show_residuals = T
+)
+```
+
+::: topic
+Select and plot just the "price" term of the hw.mpg data.
+:::
+
+```{r}
+#| fig-cap: The *price* term of the GAM model for mpg data.
+
+data("mpg", package = "gamair")
+hw_mpg_gam <- mgcv::gam(
+  formula = hw.mpg ~ s(weight) + s(rpm) + s(price) + comp.ratio,
+  data = mpg, 
+  method = "REML"
+)
+RgamPkg::plot_gam_1d(
+  gam_model = hw_mpg_gam,
+  select_labels = "s(price)",
+  columns = 1,
+  col_width = 12,
+  row_height = 8
+)
+```
+
+::: topic
+Plot all of the terms in the hw.mpg GAM model.
+:::
+
+```{r}
+hw_mpg_gam <- mgcv::gam(
+  formula = hw.mpg ~ s(weight) + s(price) + rpm + comp.ratio,
+  data = mpg, 
+  method = "REML"
+)
+# RgamPkg::plot_gam_1d(
+#   gam_model = hw_mpg_gam
+# )
+```
+
